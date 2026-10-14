@@ -1,0 +1,42 @@
+{
+  "package": "virtualjaguar",
+  "effectiveTerms": "GPL-3.0",
+  "commercialUse": "allowed under the GPL",
+  "note": "The core is Virtual Jaguar (virtualjaguar-libretro, GPL-3.0), with this repository's integration (MIT). The program is distributed under the GPL version 3. Compiled in from Virtual Jaguar's own tree: libretro-common (MIT) and libchdr (BSD-3-Clause) with LZMA (public domain), miniz (MIT) and zstd (BSD), and, as upstream's builds carry them, the Atari Jaguar's boot ROMs and Jaguar CD BIOSes (src/bios; Hasbro Interactive released the Jaguar as an open platform in 1999). The package contains no game.",
+  "components": [
+    {
+      "name": "chimera-core-virtualjaguar (integration)",
+      "license": "MIT, and GPL-3.0 for patches/",
+      "url": "https://github.com/ToolAssisted-run/chimera-core-virtualjaguar",
+      "commit": "{selfCommit}",
+      "file": "LICENSE",
+      "sourceUrl": "https://github.com/ToolAssisted-run/chimera-core-virtualjaguar/archive/{commit}.tar.gz"
+    },
+    {
+      "name": "Virtual Jaguar (virtualjaguar-libretro)",
+      "license": "GPL-3.0",
+      "url": "https://github.com/libretro/virtualjaguar-libretro",
+      "commit": "{submodule:extern/virtualjaguar}",
+      "file": "extern/virtualjaguar/LICENSE",
+      "sourceUrl": "https://github.com/libretro/virtualjaguar-libretro/archive/{commit}.tar.gz"
+    },
+    {
+      "name": "libretro-common (in Virtual Jaguar)",
+      "license": "MIT",
+      "url": "https://github.com/libretro/libretro-common",
+      "file": "extern/virtualjaguar/libretro-common/file/file_path.c"
+    },
+    {
+      "name": "libchdr (in Virtual Jaguar)",
+      "license": "BSD-3-Clause",
+      "url": "https://github.com/rtissera/libchdr",
+      "file": "extern/virtualjaguar/deps/libchdr/LICENSE.txt"
+    },
+    {
+      "name": "Atari Jaguar boot ROMs and Jaguar CD BIOSes (in Virtual Jaguar, src/bios)",
+      "license": "Atari's, released with the Jaguar as an open platform by Hasbro Interactive (1999); shipped as upstream ships them",
+      "url": "https://github.com/libretro/virtualjaguar-libretro/tree/master/src/bios",
+      "file": "LICENSE"
+    }
+  ]
+}

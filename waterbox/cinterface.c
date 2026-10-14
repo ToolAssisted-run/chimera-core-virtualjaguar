@@ -39,9 +39,33 @@ static char g_loadError[512];
 static struct { const char *key; char value[128]; } g_options[MAX_OPTIONS];
 static int g_optionCount;
 
+/* What a core must never do, whatever a project says: reach the network,
+ * the microphone or a debugger, read or write folders of textures or an SD
+ * card, or skip drawing frames. */
+static const struct { const char *key, *value; } kForced[] = {
+	{ "virtualjaguar_netlink", "disabled" },
+	{ "virtualjaguar_voice_chat", "disabled" },
+	{ "virtualjaguar_gdb_stub", "disabled" },
+	{ "virtualjaguar_texture_dump", "disabled" },
+	{ "virtualjaguar_texture_replace", "disabled" },
+	{ "virtualjaguar_jgd_sd", "disabled" },
+	{ "virtualjaguar_frameskip", "disabled" },
+	{ "virtualjaguar_alt_inputs", "disabled" },
+	{ "virtualjaguar_p1_device", "pad" },
+	{ "virtualjaguar_p2_device", "pad" },
+};
+
 static void take_option(const char *key, const char *def)
 {
 	if (!key || g_optionCount >= MAX_OPTIONS) return;
+	for (size_t i = 0; i < sizeof kForced / sizeof kForced[0]; i++)
+		if (!strcmp(kForced[i].key, key))
+		{
+			g_options[g_optionCount].key = key;
+			snprintf(g_options[g_optionCount].value, sizeof g_options[g_optionCount].value, "%s", kForced[i].value);
+			g_optionCount++;
+			return;
+		}
 	for (int i = 0; i < g_optionCount; i++)
 		if (!strcmp(g_options[i].key, key)) return;
 	g_options[g_optionCount].key = key;
@@ -304,6 +328,9 @@ ECL_EXPORT int Init(void)
 	retro_set_input_poll(input_poll);
 	retro_set_input_state(input_state);
 	retro_init();
+	if (getenv("CHIMERA_VJ_OPTIONS"))
+		for (int i = 0; i < g_optionCount; i++)
+			fprintf(stderr, "option %s=%s\n", g_options[i].key, g_options[i].value);
 
 	/* the game is read here and handed over whole */
 	FILE *f = fopen(g_game, "rb");

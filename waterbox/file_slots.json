@@ -1,0 +1,34 @@
+{
+ "_comment": "This file lists the kinds of file a project of this core can hold. Chimera's New Project window is built from it. Each kind is called a slot. A project file records its files under the slot ids used here.",
+ "slots": [
+  {
+   "id": "cart",
+   "title": "Game",
+   "min": 1,
+   "max": 1,
+   "formats": [
+    "j64",
+    "jag",
+    "rom",
+    "abs",
+    "cof",
+    "bin"
+   ],
+   "help": "The game's cartridge: a .j64 or .rom file (or .jag, .abs, .cof, .bin for homebrew)."
+  },
+  {
+   "id": "savedata",
+   "title": "Save data",
+   "min": 0,
+   "max": 1,
+   "formats": [
+    "eeprom",
+    "srm",
+    "sav"
+   ],
+   "help": "What the cartridge's save memory (its EEPROM) holds at the start, for a project that begins from a saved game: a file as Emulator > Export Save Data... writes it (jaguar.eeprom), or a RetroArch .srm. The file is never changed. Leave this empty to start with an empty save memory.",
+   "namePattern": "\\.(eeprom|srm|sav)$",
+   "nameHelp": "a save file is identified by its extension, .eeprom, .srm or .sav."
+  }
+ ]
+}

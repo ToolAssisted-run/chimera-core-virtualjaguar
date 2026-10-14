@@ -70,3 +70,54 @@ zero-filled, as in the PUAE core.
   frames for each. A state saved and loaded every frame, a state moved to
   a new sandbox, and a state kept at frame 800 and loaded at 1,200 (79
   digests repeat) change nothing.
+
+## The package, the controls and the tests (2026-10-14)
+
+- **One system, `JAG` ("Atari Jaguar")**, with a cartridge slot and a Save
+  data slot for the EEPROM (exported as `jaguar.eeprom`).
+- **Settings**: Boot (`virtualjaguar_bios`: the replacement start-up, or the
+  console's own boot ROM), Boot ROM (Series K or Model M), PAL, Fast
+  Blitter, Idle-Loop Fast-Forward (on, as upstream has it), Internal
+  Resolution, True Color, Widescreen.
+- **Forced off, whatever a project says**: the network link, voice chat,
+  the debugger stub, texture dumping and replacing (folders), the
+  GameDrive's SD card (a folder), frameskip, and upstream's input
+  remapping; both ports hold a pad.
+- **Controls**: two controllers, each with Up, Down, Left, Right, A, B, C,
+  Option, Pause and the keypad (0 to 9, *, #): 42 buttons.
+
+**A test cartridge of the tests' own.** `tests/make-jaguar-program.py`
+writes a 1 MB cartridge whose 68000 program selects each of the four rows
+of both ports and copies $F14000 and $F14002 to main RAM at $10000, and
+counts its turns. Each of the 42 buttons, held alone, clears one bit of
+those words and no two the same one (`jag:buttons`).
+
+**The console's own boot ROM** refuses a cartridge that is not signed, as
+the console does, so the test cartridge runs only with Boot 'disabled'.
+The two demos in upstream's tree are signed, and both start through it.
+
+**The test script**, `waterbox/run-gate.sh`: 20 tests, 20 passed, in under
+a minute. 17 need no file of anyone's (the test cartridge, upstream's two
+demos, Chimera's headless runner); 3 run demos from a JaguarDemos clone
+(Nostalgia, YARC Reloaded, the GPU object demo). **The window test**:
+3 passed (the test cartridge with a button held, the keys, the YARC demo).
+**On Windows**, Chimera's headless runner plays a project of the test
+cartridge and one of YARC to the Linux runner's main RAM and picture.
+
+**Broken on purpose once**: with player 2's buttons dropped, every frame
+said to have read the controllers, Boot forced off and PAL forced off,
+four tests failed: `jag:buttons`, `jag:lag`, `demo:boot-rom`, `demo:pal`.
+
+**Tried and not working**: Jag Ball (JaguarDemos) draws its scene and does
+not move, nor answer the controls its README names; it reads the
+controllers in about half the frames. Upstream's own check passes it on
+lighting up the screen only. Not looked into.
+
+## Not done, and why
+
+- **The Jaguar CD**: Virtual Jaguar runs it (cue, cdi, chd); not wired up
+  yet. Upstream's tree has synthetic CD images to test with.
+- **The other controllers** (Team Tap, rotary, mice, analog, driving, light
+  gun): pads only for now.
+- **Link play**: the core is one machine, and has no sockets.
+- **A commercial game**: none was tried (the owner has none).
