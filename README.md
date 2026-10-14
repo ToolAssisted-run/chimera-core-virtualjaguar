@@ -20,8 +20,9 @@ New, and not published yet.
   through Virtual Jaguar's replacement for the CD's start-up, or through
   the console's own CD BIOS (carried in the core): a test disc the tests
   write, and upstream's synthetic CHD. No commercial CD was tried.
-- On Windows, Chimera's headless runner plays a project to the same memory
-  and picture as on Linux. Chimera's window was tried on Linux only.
+- On Windows, Chimera's headless runner plays projects (a cartridge, the
+  CD through its own BIOS, an analog stick and a mouse moving) to the same
+  memory and picture as on Linux. Chimera's window was tried on Linux only.
 - Every controller Virtual Jaguar has: pads, the Team Tap (eight pads),
   the Tempest 2000 rotary, the mice (ST, and Amiga through either
   adapter), the analog joystick, the driving controller, the paddle input,

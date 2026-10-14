@@ -226,3 +226,9 @@ because it compared with an unrelated run, which always differs; it now
 compares with the same run through the replacement start-up.
 
 Counts: the test script 31 passed, 0 failed, 0 skipped.
+
+**On Windows** (2026-10-14, the package at this point): Chimera's
+headless runner plays a project of the test disc through the console's CD
+BIOS (1,300 frames, P1 A held at the end) and one of the test cartridge
+with an analog stick in port 1 and a mouse in port 2, both moved in the
+movie, to the Linux runner's main RAM and picture.
