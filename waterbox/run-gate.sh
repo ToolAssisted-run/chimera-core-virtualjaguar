@@ -280,6 +280,17 @@ for n in cd cd-box cd-rerecord cd-session; do stream "$work/$n.out" > "$work/$n.
 check "cd:sandbox" "native and sandbox print the same $(wc -l < "$work/cd.stream") digests for the disc, with presses" same "$work/cd.stream" "$work/cd-box.stream"
 check "cd:states" "a state saved and loaded every frame, and a state moved to a new sandbox, change nothing on the CD" \
 	sh -c "[ -s '$work/cd-box.stream' ] && cmp -s '$work/cd-box.stream' '$work/cd-rerecord.stream' && cmp -s '$work/cd-box.stream' '$work/cd-session.stream'"
+# the console's own CD BIOS: its start-up animation, then the same program
+mkdir -p "$work/cdb"
+for f in disc.cue track01.bin track02.bin; do ln -sf "$work/cdfiles/$f" "$work/cdb/$f"; done
+printf '{"disc":["disc.cue"]}' > "$work/cdb/slots"; printf '{"machine":"jaguarcd","cd_boot_mode":"bios"}' > "$work/cdb/settings"
+nat cdb cdb --frames 1200 --report 100 --press 4:1000:300 --dump-domain "Main RAM" "$work/cdb.ram"
+box cdb-box cdb --frames 1200 --report 100 --press 4:1000:300
+nat cdh cd --frames 1200 --report 100 --press 4:1000:300
+for n in cdb cdb-box cdh; do stream "$work/$n.out" > "$work/$n.stream"; done
+check "cd:bios" "through the console's own CD BIOS (CD Boot 'bios') the disc starts after the BIOS's animation ($(pictures "$work/cdb.out") pictures in 12 reports) and the program runs (its count $(count "$work/cdb.ram")) and sees P1 A, another run than the same one through the replacement start-up ($(pictures "$work/cdh.out") pictures); the sandbox gives the native build's digests" \
+	sh -c "[ $(count "$work/cdb.ram") -gt 100 ] && [ '$(block "$work/cdb.ram")' != '$(block "$work/cd-idle.ram")' ] && [ -s '$work/cdb.stream' ] && cmp -s '$work/cdb.stream' '$work/cdb-box.stream' && [ -s '$work/cdh.stream' ] && ! cmp -s '$work/cdb.stream' '$work/cdh.stream' && [ $(pictures "$work/cdb.out") -gt $(pictures "$work/cdh.out") ]"
+
 # upstream's synthetic CHD: two sessions, an Atari boot header and a stub
 mkdir -p "$work/chd"
 ln -sf "$intree/synth_jagcd.chd" "$work/chd/synth_jagcd.chd"

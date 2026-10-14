@@ -17,9 +17,9 @@ New, and not published yet.
   and without the console's boot ROM, NTSC and PAL. No commercial game was
   tried.
 - The Jaguar CD starts a disc (a .cue with its tracks, a .chd or a .cdi)
-  through Virtual Jaguar's replacement for the CD's start-up: a test disc
-  the tests write, and upstream's synthetic CHD. No commercial CD was
-  tried.
+  through Virtual Jaguar's replacement for the CD's start-up, or through
+  the console's own CD BIOS (carried in the core): a test disc the tests
+  write, and upstream's synthetic CHD. No commercial CD was tried.
 - On Windows, Chimera's headless runner plays a project to the same memory
   and picture as on Linux. Chimera's window was tried on Linux only.
 - Every controller Virtual Jaguar has: pads, the Team Tap (eight pads),
@@ -48,7 +48,8 @@ replacement for the console's start-up.
   gun (Gun X and Gun Y, a fraction of the picture, and its trigger and
   buttons).
 - **Settings**: Machine (the console, or the console with the Jaguar CD),
-  Boot (start at once, or through the console's own boot ROM,
+  CD Boot (the replacement start-up, or the CD's own BIOS), CD BIOS
+  (retail or developers'), CD Read Speed, Boot (start at once, or through the console's own boot ROM,
   which refuses cartridges that are not signed, as the console does), Boot
   ROM (Series K or Model M), PAL, Fast Blitter, Idle-Loop Fast-Forward,
   Internal Resolution, True Color and Widescreen. All but Widescreen are

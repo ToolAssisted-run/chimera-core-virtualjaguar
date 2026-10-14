@@ -134,7 +134,7 @@ jobs:
           for t in source:patched package:fresh package:controls jag:runs jag:buttons jag:teamtap jag:devices jag:gun-offscreen \
                    jag:sandbox jag:devices-sandbox \
                    jag:presses-change-the-run jag:lag jag:state-every-frame jag:state-other-box \
-                   demo:runs demo:sandbox demo:boot-rom demo:pal demo:state-rewind cd:runs cd:sandbox cd:states cd:chd \
+                   demo:runs demo:sandbox demo:boot-rom demo:pal demo:state-rewind cd:runs cd:sandbox cd:states cd:bios cd:chd \
                    refused:no-game engine:jag engine:jagcd; do
             grep -q "^$t  *PASS " gate.out || { echo "$t did not pass"; exit 1; }
           done

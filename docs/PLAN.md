@@ -115,7 +115,10 @@ lighting up the screen only. (Looked into on 2026-10-14: see "Jag Ball".)
 
 ## Not done, and why
 
-- **Link play**: the core is one machine, and has no sockets.
+- **Link play** (JagLink, the CatBox, the Voice Modem): two consoles
+  joined by a cable. A Chimera core is one machine, so there is no second
+  console to join; Virtual Jaguar's own ways of joining one (over TCP, or
+  RetroArch's netplay) are network links, which a core does not have.
 - **A commercial game**: none was tried (the owner has none).
 
 ## The Jaguar CD (2026-10-14)
@@ -124,8 +127,8 @@ lighting up the screen only. (Looked into on 2026-10-14: see "Jag Ball".)
   setting (`jaguar` or `jaguarcd`); the same controls. Its slot is a Disc
   (a .cue with its track files, a .chd or a .cdi), given to Virtual Jaguar
   by its name as upstream wants (it reads the tracks itself). The CD starts
-  through Virtual Jaguar's replacement for the CD's start-up (its default);
-  the real CD BIOS is not offered as a setting yet.
+  through Virtual Jaguar's replacement for the CD's start-up (its default),
+  or through the console's own CD BIOS (see "The CD BIOS").
 - **Save data**: a CD console's save memory is the EEPROM and the Memory
   Track together (131,328 bytes), exported as `jaguarcd.memtrack`.
 - **A test disc**: `tests/make-jaguar-program.py --cd` writes `disc.cue`
@@ -203,3 +206,23 @@ repeats the one before, so the test script reads memory with `od -v`.
 
 Counts: the test script 30 passed, 0 failed, 0 skipped (with homebrew:jag_ball); the window test 3
 passed; package checks 18 of 18.
+
+## The CD BIOS (2026-10-14)
+
+Three settings, upstream's options: CD Boot (`cd_boot_mode`: 'hle', the
+default, Virtual Jaguar's replacement start-up; 'bios', the console's own
+CD BIOS, which also turns the boot ROM on; 'auto', Virtual Jaguar's choice
+by the disc), CD BIOS (`cd_bios_type`: 'retail' or 'dev'), and CD Read
+Speed (`cd_read_speed`, for the replacement start-up only). The CD BIOSes
+are among the ROMs Virtual Jaguar carries.
+
+Measured: the retail CD BIOS shows its start-up animation and then starts
+the test disc; the program runs and sees P1 A; native and sandbox print the
+same digests; the run differs from the same run through the replacement
+start-up (`cd:bios`). The developers' CD BIOS does not start the test
+disc: it is made for developers' discs. Broken on purpose (CD Boot forced
+to 'hle'): `cd:bios` failed. It had first passed with the fault in,
+because it compared with an unrelated run, which always differs; it now
+compares with the same run through the replacement start-up.
+
+Counts: the test script 31 passed, 0 failed, 0 skipped.
