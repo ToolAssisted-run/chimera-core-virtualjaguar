@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # The core's tests. Each line says what was compared. The script ends with a
 # count of tests that passed, failed and were skipped, and with an error if
 # any failed. A skipped test is not a pass.
@@ -42,7 +42,8 @@ demos="${JAGUAR_DEMOS:-$root/tests/games-local/JaguarDemos}"
 intree="$root/extern/virtualjaguar/test/roms"
 
 work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
+# GATE_KEEP=1 keeps the work folder (the runs' output and dumps) and says where
+if [ -n "${GATE_KEEP:-}" ]; then trap 'echo "work folder kept: $work"' EXIT; else trap 'rm -rf "$work"' EXIT; fi
 ok=0; failed=0; skipped=0
 report() { # <test> <PASS|FAIL|SKIP> <what>
 	printf '%-22s %-6s %s\n' "$1" "$2" "$3"
@@ -60,10 +61,11 @@ differ() { [ -s "$1" ] && [ -s "$2" ] && ! cmp -s "$1" "$2"; }
 field() { stream "$1" | tail -1 | awk -v f="$2" '{for (i = 1; i <= NF; i++) if ($i == f) { print $(i + 1); exit }}'; }
 pictures() { stream "$1" | awk '{print $7}' | sort -u | wc -l; }
 # the program's words (tests/make-jaguar-program.py keeps them at $10000 of
-# main RAM, big-endian): block <dump> is the eight controller words in hex,
-# count <dump> its count of turns
-block() { od -An -tx1 -j $((0x10000)) -N16 "$1" 2> /dev/null | tr -d ' \n'; }
-count() { printf '%d' "0x$(od -An -tx1 -j $((0x10010)) -N4 "$1" 2> /dev/null | tr -d ' ')"; }
+# main RAM, big-endian): block <dump> is the 56 controller words, the light
+# pen's place and the paddle's four channels in hex, count <dump> its count
+# of turns
+block() { od -v -An -tx1 -j $((0x10000)) -N124 "$1" 2> /dev/null | tr -d ' \n'; }
+count() { printf '%d' "0x$(od -v -An -tx1 -j $((0x1007C)) -N4 "$1" 2> /dev/null | tr -d ' ')"; }
 # folder <name> <settings json> <cartridge>: a work folder as the sandbox
 # mounts a project - every file under its name
 folder() {
@@ -115,42 +117,96 @@ folder pr '{}' "$work/carts/prog.j64"
 folder qu '{}' "$work/carts/quiet.j64"
 
 "$native" "$work/pr" --frames 1 --list-panel > "$work/panel.out" 2> /dev/null
-check "package:controls" "the package declares the core's own $(grep -c '^panel' "$work/panel.out") buttons, in the core's order, for both machines" \
+check "package:controls" "the package declares the core's own $(grep -c '^panel' "$work/panel.out") buttons, in the core's order, and 22 axes, for both machines" \
 	python3 - "$here/waterbox.config" "$work/panel.out" <<'PY'
 import json, sys
 cfg = json.load(open(sys.argv[1]))
 buttons = [l[l.index("'") + 1:l.rindex("'")] for l in open(sys.argv[2]) if l.startswith("panel ")]
 m = cfg["machines"]
-sys.exit(0 if len(m) == 2 and all(x["input"]["buttons"] == buttons for x in m) and len(buttons) == 42 else 1)
+sys.exit(0 if len(m) == 2 and all(x["input"]["buttons"] == buttons and len(x["input"]["axes"]) == 22 for x in m) and len(buttons) == 194 else 1)
 PY
 
 nat pr-idle pr --frames 300 --report 25 --dump-domain "Main RAM" "$work/pr-idle.ram"
-check "jag:runs" "a cartridge this script writes runs through the replacement start-up: its count reached $(count "$work/pr-idle.ram") in 300 frames, and it read the controllers ($(block "$work/pr-idle.ram"))" \
-	sh -c "[ $(count "$work/pr-idle.ram") -gt 1000 ] && [ '$(block "$work/pr-idle.ram")' = ffefff7fffddff7fffbbff7fff77ff7f ]"
+check "jag:runs" "a cartridge this script writes runs through the replacement start-up: its count reached $(count "$work/pr-idle.ram") in 300 frames, and it read both pads' four rows ($(block "$work/pr-idle.ram" | cut -c1-32))" \
+	sh -c "[ $(count "$work/pr-idle.ram") -gt 100 ] && [ '$(block "$work/pr-idle.ram" | cut -c1-32)' = ff7fff7fffbdff7fffdbff7fffe7ff7f ]"
 
-# every one of the 42 buttons, held alone: it clears one bit of the
-# program's eight words, and no two buttons the same one
-: > "$work/buttons.txt"
-i=0
-while [ $i -lt 42 ]; do
-	nat b$i pr --frames 120 --press $i:60:100 --dump-domain "Main RAM" "$work/b$i.ram"
-	echo "$i $(block "$work/b$i.ram")" >> "$work/buttons.txt"
-	i=$((i + 1))
-done
-check "jag:buttons" "each of the 42 buttons of the two controllers, held alone, clears one bit of what the program reads, and each a different one" \
-	python3 - "$work/buttons.txt" "$(block "$work/pr-idle.ram")" <<'PY'
+# clears <idle block> <file of "index block" lines> <count>: each line
+# differs from idle, only by bits cleared (a pad's button reads 0 while held,
+# in each of the program's four passes through the rows), and no two lines
+# alike; there are <count> lines
+clears() {
+	python3 - "$1" "$2" "$3" <<'PY'
 import sys
-idle = bytes.fromhex(sys.argv[2])
-seen = set()
-for line in open(sys.argv[1]):
+idle = bytes.fromhex(sys.argv[1])
+seen = set(); n = 0
+for line in open(sys.argv[2]):
     i, h = line.split()
-    b = bytes.fromhex(h)
-    diff = [(k, idle[k] ^ b[k]) for k in range(16) if idle[k] != b[k]]
-    if len(diff) != 1 or bin(diff[0][1]).count("1") != 1 or (idle[diff[0][0]] & diff[0][1]) == 0:
+    b = bytes.fromhex(h); n += 1
+    if b == idle or any(y & ~x & 0xFF for x, y in zip(idle, b)):
         sys.exit(1)
-    seen.add(diff[0])
-sys.exit(0 if len(seen) == 42 else 1)
+    seen.add(b)
+sys.exit(0 if len(seen) == n == int(sys.argv[3]) else 1)
 PY
+}
+# held_each <folder> <out file>: every live button of the folder's panel,
+# held alone from frame 60 to the end
+held_each() {
+	: > "$2"
+	"$native" "$work/$1" --frames 1 --list-panel 2> /dev/null | grep "^panel .* active$" | while read -r _ i _; do
+		"$native" "$work/$1" --frames 120 --press "$i":60:100 --dump-domain "Main RAM" "$work/he.ram" > /dev/null 2>&1
+		echo "$i $(block "$work/he.ram")" >> "$2"
+	done
+}
+held_each pr "$work/buttons.txt"
+check "jag:buttons" "each of the 42 buttons of the two pads, held alone, clears bits of what the program reads and sets none, and no two the same" \
+	clears "$(block "$work/pr-idle.ram")" "$work/buttons.txt" 42
+
+# a Team Tap in each port: eight pads, 168 buttons
+folder tap '{"p1_device":"teamtap","p2_device":"teamtap"}' "$work/carts/prog.j64"
+nat tap-idle tap --frames 120 --dump-domain "Main RAM" "$work/tap-idle.ram"
+held_each tap "$work/tap.txt"
+check "jag:teamtap" "with a Team Tap in each port, each of the 168 buttons of the eight pads (P1 to P8), held alone, clears bits of its own and sets none" \
+	clears "$(block "$work/tap-idle.ram")" "$work/tap.txt" 168
+
+# the other controllers: every live control alone changes what the program
+# reads (a mouse or the wheel is moved 5 steps a frame: a quadrature
+# counter's phase comes round again after 4)
+devices=""
+for dv in '{"p1_device":"rotary","p2_device":"mouse_st"}' '{"p2_device":"mouse_amiga"}' '{"p2_device":"mouse_amiga_adapter"}' \
+          '{"p1_device":"analog","p2_device":"driving"}' '{"p1_device":"paddle","p2_device":"6d"}' '{"p1_device":"lightgun","p2_device":"rotary"}'; do
+	folder dev "$dv" "$work/carts/prog.j64"
+	nat dev-idle dev --frames 120 --dump-domain "Main RAM" "$work/dev-idle.ram"
+	idle="$(block "$work/dev-idle.ram")"
+	"$native" "$work/dev" --frames 1 --list-panel > "$work/dev-panel.out" 2> /dev/null
+	nb=0; nbad=""
+	while read -r _ i rest; do
+		name="$(echo "$rest" | sed "s/'\(.*\)' active/\1/")"
+		[ "$name" = "P1 Gun Offscreen" ] && continue
+		"$native" "$work/dev" --frames 120 --press "$i":60:100 --dump-domain "Main RAM" "$work/d.ram" > /dev/null 2>&1
+		nb=$((nb + 1)); [ "$(block "$work/d.ram")" = "$idle" ] && nbad="$nbad [$name]"
+	done < <(grep "^panel .* active$" "$work/dev-panel.out")
+	na=0
+	while read -r _ i _; do
+		moved=""
+		for v in 5 20000 50000; do
+			"$native" "$work/dev" --frames 120 --axis "$i":$v:60:100 --dump-domain "Main RAM" "$work/d.ram" > /dev/null 2>&1
+			[ "$(block "$work/d.ram")" != "$idle" ] && { moved=1; break; }
+		done
+		na=$((na + 1)); [ -z "$moved" ] && nbad="$nbad [axis $i]"
+	done < <(grep "^axis .* active$" "$work/dev-panel.out")
+	devices="$devices $(echo "$dv" | tr -d '{}"'): $nb buttons and $na axes;"
+	[ -n "$nbad" ] && devices="$devices NOT:$nbad;"
+done
+check "jag:devices" "every live control of the other controllers changes what the program reads:$devices" \
+	sh -c "! echo '$devices' | grep -q NOT"
+
+# the light gun: Gun Offscreen changes the trigger's shot
+folder gun '{"p1_device":"lightgun"}' "$work/carts/prog.j64"
+gt="$(index gun "P1 Trigger")"; go="$(index gun "P1 Gun Offscreen")"
+nat gun-on gun --frames 120 --axis 9:32768:1:200 --axis 10:32768:1:200 --press "$gt":60:100 --dump-domain "Main RAM" "$work/gun-on.ram"
+nat gun-off gun --frames 120 --axis 9:32768:1:200 --axis 10:32768:1:200 --press "$gt":60:100 --press "$go":1:200 --dump-domain "Main RAM" "$work/gun-off.ram"
+check "jag:gun-offscreen" "the light gun's shot at the middle of the picture latches the light pen's place ($(block "$work/gun-on.ram" | cut -c225-232)); with Gun Offscreen held it does not ($(block "$work/gun-off.ram" | cut -c225-232))" \
+	sh -c "[ '$(block "$work/gun-on.ram" | cut -c225-232)' != '$(block "$work/gun-off.ram" | cut -c225-232)' ]"
 
 allrun="--frames 300 --report 10 --press 0:50:40 --press 4:60:20 --press 8:100:10 --press 20:120:5 --press 21:150:30 --press 26:200:20"
 nat all pr $allrun
@@ -159,6 +215,15 @@ for n in all all-box pr-idle; do stream "$work/$n.out" > "$work/$n.stream"; done
 check "jag:sandbox" "native and sandbox print the same $(wc -l < "$work/all.stream") digests of memory, picture and sound, with buttons of both controllers pressed" \
 	same "$work/all.stream" "$work/all-box.stream"
 check "jag:presses-change-the-run" "the run with presses differs from the idle one" differ "$work/all.stream" "$work/pr-idle.stream"
+
+folder dvs '{"p1_device":"analog","p2_device":"mouse_st"}' "$work/carts/prog.j64"
+dvrun="--frames 300 --report 10 --axis 3:20000:50:100 --axis 4:-15000:80:60 --axis 12:5:100:50 --axis 13:-3:120:40 --press $(index dvs "P2 Mouse Left"):150:20 --press $(index dvs "P1 D"):170:30"
+nat dvs dvs $dvrun
+box dvs-box dvs $dvrun
+box dvs-rerecord dvs $dvrun --rerecord
+for n in dvs dvs-box dvs-rerecord; do stream "$work/$n.out" > "$work/$n.stream"; done
+check "jag:devices-sandbox" "with an analog stick in port 1 and a mouse in port 2, both moved, native and sandbox print the same $(wc -l < "$work/dvs.stream") digests, also with a state saved and loaded every frame" \
+	sh -c "[ -s '$work/dvs.stream' ] && cmp -s '$work/dvs.stream' '$work/dvs-box.stream' && cmp -s '$work/dvs-box.stream' '$work/dvs-rerecord.stream'"
 
 nat q qu --frames 300 --report 100
 check "jag:lag" "the program that reads the controllers has no lag frame in 300 ($(field "$work/pr-idle.out" lag)); its twin that reads none, 300 ($(field "$work/q.out" lag))" \
@@ -204,8 +269,8 @@ printf '{"disc":["disc.cue"]}' > "$work/cd/slots"; printf '{"machine":"jaguarcd"
 nat cd-idle cd --frames 300 --report 25 --dump-domain "Main RAM" "$work/cd-idle.ram"
 nat cd-a cd --frames 300 --press 4:100:300 --dump-domain "Main RAM" "$work/cd-a.ram"
 nat cd-hash cd --frames 300 --press 41:100:300 --dump-domain "Main RAM" "$work/cd-hash.ram"
-check "cd:runs" "a disc this script writes boots on the Jaguar CD: the program's count reached $(count "$work/cd-idle.ram") in 300 frames; P1 A and P2 # reach it ($(block "$work/cd-a.ram"), $(block "$work/cd-hash.ram"))" \
-	sh -c "[ $(count "$work/cd-idle.ram") -gt 1000 ] && [ '$(block "$work/cd-idle.ram")' = ffefff7fffddff7fffbbff7fff77ff7f ] && [ '$(block "$work/cd-a.ram")' != '$(block "$work/cd-idle.ram")' ] && [ '$(block "$work/cd-hash.ram")' != '$(block "$work/cd-idle.ram")' ]"
+check "cd:runs" "a disc this script writes boots on the Jaguar CD: the program's count reached $(count "$work/cd-idle.ram") in 300 frames; it reads what the cartridge's does, and P1 A and P2 # reach it" \
+	sh -c "[ $(count "$work/cd-idle.ram") -gt 100 ] && [ '$(block "$work/cd-idle.ram")' = '$(block "$work/pr-idle.ram")' ] && [ '$(block "$work/cd-a.ram")' != '$(block "$work/cd-idle.ram")' ] && [ '$(block "$work/cd-hash.ram")' != '$(block "$work/cd-idle.ram")' ]"
 cdrun="--frames 300 --report 10 --press 4:100:40 --press 30:150:30"
 nat cd cd $cdrun
 box cd-box cd $cdrun
@@ -242,7 +307,7 @@ if [ -n "$chimera_root" ] && [ -x "$runner" ] && [ -f "$package" ]; then
 	"$runner" --project "$work/proj/prog.chimeraProject" "$package" --files "$work/proj" --frames 300 \
 		--dump "Main RAM=$work/engine.ram" > "$work/engine.log" 2>&1
 	box eng pr --frames 300 --press "$(index pr "P1 A")":200:101 --press "$(index pr "P2 #")":150:151 --dump-domain "Main RAM" "$work/eng.ram"
-	check "engine:jag" "a project of the program with presses plays in Chimera's headless runner to the sandbox runner's main RAM ($(wc -c < "$work/eng.ram" 2> /dev/null) bytes; the program read $(block "$work/engine.ram")), another than the idle run's" \
+	check "engine:jag" "a project of the program with presses plays in Chimera's headless runner to the sandbox runner's main RAM ($(wc -c < "$work/eng.ram" 2> /dev/null) bytes; the program's reads changed), another than the idle run's" \
 		sh -c "cmp -s '$work/engine.ram' '$work/eng.ram' && [ '$(block "$work/engine.ram")' != '$(block "$work/pr-idle.ram")' ]"
 	mkdir -p "$work/projcd"
 	cp "$work/cdfiles/disc.cue" "$work/cdfiles/track01.bin" "$work/cdfiles/track02.bin" "$work/projcd/"
@@ -251,7 +316,7 @@ if [ -n "$chimera_root" ] && [ -x "$runner" ] && [ -f "$package" ]; then
 	"$runner" --project "$work/projcd/cd.chimeraProject" "$package" --files "$work/projcd" --frames 300 \
 		--dump "Main RAM=$work/engine-cd.ram" > "$work/engine-cd.log" 2>&1
 	box engcd cd --frames 300 --press "$(index pr "P1 B")":100:201 --dump-domain "Main RAM" "$work/engcd.ram"
-	check "engine:jagcd" "a project of the disc (its .cue and two track files) plays in Chimera's headless runner to the sandbox runner's main RAM (the program read $(block "$work/engine-cd.ram" | cut -c1-8)), another than the idle run's" \
+	check "engine:jagcd" "a project of the disc (its .cue and two track files) plays in Chimera's headless runner to the sandbox runner's main RAM , another than the idle run's" \
 		sh -c "cmp -s '$work/engine-cd.ram' '$work/engcd.ram' && [ '$(block "$work/engine-cd.ram")' != '$(block "$work/cd-idle.ram")' ]"
 else
 	report "engine:jag" SKIP "needs CHIMERA_ROOT with build/dll/chimera-run and build/Cores/virtualjaguar.chimeraCore"
@@ -260,6 +325,15 @@ fi
 
 # ------------------------------------------------- homebrew
 if [ -d "$demos" ]; then
+	# Jag Ball runs only through the console's own boot ROM (docs/PLAN.md):
+	# A held with Up changes its turning
+	folder hb-jb '{"bios":"enabled"}' "$demos/jag_ball/jag_ball.j64"
+	nat hb-jb-idle hb-jb --frames 900 --report 25
+	nat hb-jb hb-jb --frames 900 --report 25 --press "$(index hb-jb "P1 A")":300:30 --press "$(index hb-jb "P1 Up")":300:30
+	box hb-jb-box hb-jb --frames 900 --report 25 --press "$(index hb-jb "P1 A")":300:30 --press "$(index hb-jb "P1 Up")":300:30
+	for n in hb-jb-idle hb-jb hb-jb-box; do stream "$work/$n.out" > "$work/$n.stream"; done
+	check "homebrew:jag_ball" "Jag Ball through the boot ROM turns ($(pictures "$work/hb-jb-idle.out") pictures), A held with Up changes the run, and the sandbox gives the native build's digests" \
+		sh -c "[ $(pictures "$work/hb-jb-idle.out") -gt 10 ] && ! cmp -s '$work/hb-jb.stream' '$work/hb-jb-idle.stream' && cmp -s '$work/hb-jb.stream' '$work/hb-jb-box.stream'"
 	for d in nostalgia/nostalgia.j64 yarc_reloaded/cube.j64 gpuobj_hack/gpuobj.j64; do
 		n="$(basename "$(dirname "$d")")"
 		folder hb-$n '{}' "$demos/$d"
@@ -270,7 +344,7 @@ if [ -d "$demos" ]; then
 			sh -c "[ $(pictures "$work/hb-$n.out") -gt 10 ] && cmp -s '$work/hb-$n.stream' '$work/hb-$n-box.stream'"
 	done
 else
-	for n in nostalgia yarc_reloaded gpuobj_hack; do report "homebrew:$n" SKIP "no JaguarDemos clone (JAGUAR_DEMOS)"; done
+	for n in jag_ball nostalgia yarc_reloaded gpuobj_hack; do report "homebrew:$n" SKIP "no JaguarDemos clone (JAGUAR_DEMOS)"; done
 fi
 
 echo

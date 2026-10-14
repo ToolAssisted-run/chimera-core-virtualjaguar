@@ -1,8 +1,22 @@
 diff --git a/libretro.c b/libretro.c
-index 313fd30..5d3517f 100644
+index 313fd30..cc9f372 100644
 --- a/libretro.c
 +++ b/libretro.c
-@@ -4998,6 +4998,15 @@ static void update_input(void)
+@@ -820,7 +820,13 @@ static void apply_port_device(int port, InputDevType type, bool teamtap)
+    {
+       port_device_active[port] = type;
+       /* A new device has to earn the port back (see inputdev_live). */
++#ifdef CHIMERA_CORE
++      /* Chimera: the project says what is plugged in, so a device is live
++       * from the start, not after it first moves */
++      inputdev_live[port]      = (type != INPUTDEV_PAD);
++#else
+       inputdev_live[port]      = false;
++#endif
+       /* Re-resolve the ladders for the device now in the port.
+        * The rotary and the mouse have separate options because a spinner
+        * and a mouse want very different multipliers, and until this line
+@@ -4998,6 +5004,15 @@ static void update_input(void)
      * apply_port_device() guarantees a tap and a non-pad device are never
      * attached to the same port. */
     update_teamtap_input();

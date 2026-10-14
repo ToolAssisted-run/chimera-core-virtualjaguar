@@ -111,12 +111,10 @@ four tests failed: `jag:buttons`, `jag:lag`, `demo:boot-rom`, `demo:pal`.
 **Tried and not working**: Jag Ball (JaguarDemos) draws its scene and does
 not move, nor answer the controls its README names; it reads the
 controllers in about half the frames. Upstream's own check passes it on
-lighting up the screen only. Not looked into.
+lighting up the screen only. (Looked into on 2026-10-14: see "Jag Ball".)
 
 ## Not done, and why
 
-- **The other controllers** (Team Tap, rotary, mice, analog, driving, light
-  gun): pads only for now.
 - **Link play**: the core is one machine, and has no sockets.
 - **A commercial game**: none was tried (the owner has none).
 
@@ -151,3 +149,57 @@ passed.
 A trap for whoever writes the next test: the test program keeps a press
 only while it lasts (`--press F:N` holds frames F to F+N-1), so a test
 that reads memory at the end holds the button to the end.
+
+## Jag Ball (2026-10-14)
+
+Through the console's own boot ROM (Boot 'enabled'), Jag Ball runs: its
+ball turns (19 different pictures in 36 reports), and A held with Up
+changes the run from the frame they are pressed; the sandbox gives the
+native build's digests. Through Virtual Jaguar's replacement start-up its
+graphics processor never draws, on PAL or NTSC, with or without the
+idle-loop fast-forward and the fast blitter: the demo depends on a state
+the real boot ROM leaves, which upstream's replacement does not make. That
+is a gap in upstream's start-up and is left as it is; the test
+`homebrew:jag_ball` runs it with Boot 'enabled'.
+
+## Every controller (2026-10-14)
+
+- **Port 1 and Port 2 are settings**, with Virtual Jaguar's own values:
+  pad, teamtap, rotary, analog, driving, paddle and 6d in either port, a
+  light gun in port 1, the three mice (ST, Amiga through the ST adapter,
+  Amiga through the Amiga adapter) in port 2.
+- **Pads, also behind a Team Tap, go into the button tables directly**
+  (P1, P3, P4, P5 in port 1's four sockets; P2, P6, P7, P8 in port 2's).
+  The rotary keeps its pad's buttons there too, without the directions.
+- **The other controllers are Virtual Jaguar's own models** (inputdev.c:
+  quadrature counters, bank switching, the light pen latch, the paddle's
+  converter). Its libretro layer asks for their state through libretro;
+  `controller_state()` answers from the project's controls. A light gun's
+  aim is a fraction of the picture (0 to 65535), as Chimera's pointers
+  are, turned into libretro's -32768 to 32767.
+- **A device is live from the start.** Upstream keeps a mouse or a stick
+  inert until it first moves (a frontend might not send analog input at
+  all); a project says what is plugged in, so patch 0002 makes it live at
+  once.
+- **The test program** now writes both ports' four rows in order 0 to 3,
+  four times over (the analog, driving and 6D controllers switch banks on
+  row 3 followed by row 0, and the 6D has three banks), then the twelve
+  selects of the Team Tap's sockets, and reads the light pen's latch and
+  the paddle's four channels.
+
+Measured: each of the 168 buttons of eight pads clears bits of its own
+(`jag:teamtap`); every live control of every other controller changes
+what the program reads (`jag:devices`, all six pairings); a shot with Gun
+Offscreen held latches nothing (`jag:gun-offscreen`); an analog stick and
+a mouse moved give the same digests natively and in the sandbox, also
+with a state saved and loaded every frame (`jag:devices-sandbox`). Broken
+on purpose (the Team Tap's sockets not filled, the mouse given nothing,
+Gun Offscreen ignored): those three tests failed.
+
+Traps found on the way: a mouse or the wheel moved by a multiple of 4
+steps a frame shows no change in a program that keeps the last read (a
+quadrature counter's phase comes round); `od` prints `*` for a line that
+repeats the one before, so the test script reads memory with `od -v`.
+
+Counts: the test script 30 passed, 0 failed, 0 skipped (with homebrew:jag_ball); the window test 3
+passed; package checks 18 of 18.

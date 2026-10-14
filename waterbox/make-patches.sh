@@ -16,12 +16,20 @@ series='
 0003-chimera-reads-of-the-controllers-are-counted|src/jerry/joystick.c
 '
 
-rm -f "$root"/patches/*.patch
+# a patch that comes out the same is left as it is, so that a build is not
+# taken for older than its patches (the test package:fresh)
+keep="$(mktemp -d)"
 printf '%s\n' "$series" | grep '|' | while IFS='|' read -r name files; do
 	# shellcheck disable=SC2086
-	git -C "$tree" diff -- $files > "$root/patches/$name.patch"
+	git -C "$tree" diff -- $files > "$keep/$name.patch"
+	cmp -s "$keep/$name.patch" "$root/patches/$name.patch" 2> /dev/null || cp "$keep/$name.patch" "$root/patches/$name.patch"
 	echo "$name.patch: $(grep -c '^diff --git' "$root/patches/$name.patch") files"
 done
+# a patch the series no longer names goes
+for p in "$root"/patches/*.patch; do
+	[ -e "$keep/$(basename "$p")" ] || rm -f "$p"
+done
+rm -r "$keep"
 # a changed file no patch names would be lost by a fresh clone
 left="$(git -C "$tree" status --porcelain | wc -l)"
 named="$(cat "$root"/patches/*.patch | grep -c '^diff --git')"

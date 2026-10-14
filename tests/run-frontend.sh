@@ -123,7 +123,7 @@ if ! run_frontend jg "$work/config.base.ini" "$frames" "Main RAM"; then
 	report "window:jag" FAIL "Chimera did not finish the run: $(value jg detail) $(tail -2 "$work/jg.log" | tr '\n' ' ' | cut -c1-200)"
 elif [ "$(value jg frames)" != "$frames" ] || [ "$(value jg width)" != 320 ] || [ "$(value jg height)" != 240 ]; then
 	report "window:jag" FAIL "frames $(value jg frames) of $frames, picture $(value jg width)x$(value jg height) and not 320x240"
-elif [ -s "$work/engine.ram.bin" ] && cmp -s "$work/engine.ram.bin" "$work/jg.ram.bin" && [ "$words" = ffefff7d ]; then
+elif [ -s "$work/engine.ram.bin" ] && cmp -s "$work/engine.ram.bin" "$work/jg.ram.bin" && [ "$words" = ff7fff7d ]; then
 	report "window:jag" PASS "the test cartridge ran $frames frames in Chimera's window, 320x240, with P1 A held from frame 100 (the program read $words); its main RAM ($(wc -c < "$work/jg.ram.bin") bytes) is what the headless runner leaves"
 else
 	report "window:jag" FAIL "the main RAM differs from the headless runner's (or one of the two is missing), or P1 A did not reach the program ($words)"

@@ -62,11 +62,15 @@ purpose once and seen to fail.
   inert versions are built).
 - **No host clock.** The core defines `time`, `gettimeofday`,
   `clock_gettime`, `localtime` and `localtime_r` from the frames run.
-- **The controls go into the Jaguar's button tables directly** at the end
-  of the libretro layer's input step (patch 0002), not through its RetroPad
-  mapping. The test `package:controls` compares the panel with
+- **Pads go into the Jaguar's button tables directly** at the end of the
+  libretro layer's input step (patch 0002), not through its RetroPad
+  mapping; the other controllers are upstream's models, fed through
+  `controller_state()`'s answers to the layer's libretro questions. The test `package:controls` compares the panel with
   `waterbox.config`; `jag:buttons` holds that each button reaches the
   machine as one bit of its own.
+- **Read memory with `od -v`**: without it a repeated line prints as `*`.
+- **A quadrature device moved by a multiple of 4** comes back to the same
+  phase: test a mouse or the wheel with 5 steps a frame.
 - **The test program keeps a press only while it lasts.** A test that
   reads memory at the end holds the button to the end
   (`--press F:N` holds frames F to F+N-1).

@@ -13,20 +13,35 @@ layout upstream's tests/tools/gen_synth_jagcd_vpregap.py writes).
 
 The program, hand-assembled below (68000 machine code), starts at $802000,
 where the high-level BIOS jumps. For ever, it:
-  - for each of the four row selects ($E, $D, $B, $7 in both ports' nibbles
-    of $F14000, with the controllers and the sound switched on), writes the
-    select and copies $F14000 and $F14002 to main RAM, from $10000 on:
-    eight words, a pair for each select;
-  - adds one to a long word at $10010, the count of its turns.
-A button held clears its own bit in one of those words (0 while held).
-Made with "nopad" it reads no controller register, so every frame is a lag
-frame.
+  - for each of 28 select values (SELECTS below: four passes through both
+    ports' four rows in order, then the twelve values that select the
+    sockets behind a Team Tap), writes it to $F14000 with the controllers
+    and the sound on, and copies $F14000 and $F14002 to main RAM from
+    $10000 on: 56 words, a pair for each select;
+  - copies the light pen's latched place, LPH and LPV ($F00008, $F0000A),
+    to $10070;
+  - selects each of the paddle converter's four channels ($F17C00, written
+    channel | 4) and copies the conversion to $10074, a word each;
+  - adds one to a long word at $1007C, the count of its turns.
+A pad's button held clears its own bit in the controller words (0 while
+held), in each of the four passes. Made with "nopad" it reads no controller register, so every frame is
+a lag frame.
 """
 import struct
 import sys
 
 BASE = 0x10000
-SELECTS = [0x81EE, 0x81DD, 0x81BB, 0x8177]
+# Each port's four rows in order, 0 to 3, as games read them: the analog,
+# driving and 6D controllers switch banks when row 3 is followed by row 0.
+# A port's nibble for row r: port 1 (low nibble) $E, $D, $B, $7; port 2
+# (high nibble) $7, $B, $D, $E. Then the twelve other values, which select
+# the sockets behind a Team Tap (and nothing without one).
+ROW_P1 = [0xE, 0xD, 0xB, 0x7]
+ROW_P2 = [0x7, 0xB, 0xD, 0xE]
+# Four passes through the rows, so that each bank of a bank-switching
+# controller (the 6D has three) is read in one of them.
+SELECTS = [0x8100 | (ROW_P2[r] << 4) | ROW_P1[r] for r in range(4)] * 4 + \
+          [0x8100 | (n << 4) | n for n in range(16) if n not in (0x7, 0xB, 0xD, 0xE)]
 
 
 def w(v):
@@ -44,14 +59,18 @@ def program(nopad):
     code += w(0x7E00)                       # moveq #0,d7
     loop = len(code)
     code += w(0x41F9) + l(BASE)             # lea BASE,a0
-    for sel in SELECTS:
-        if nopad:
-            code += w(0x5488)               # addq.l #2,a0   (the same places, nothing read)
-            code += w(0x5488)
-            continue
-        code += w(0x33FC) + w(sel) + l(0xF14000)   # move.w #sel,$f14000
-        code += w(0x30F9) + l(0xF14000)            # move.w $f14000,(a0)+
-        code += w(0x30F9) + l(0xF14002)            # move.w $f14002,(a0)+
+    if nopad:
+        code += w(0x41E8) + w(0x7C)         # lea $7c(a0),a0   (the same places, nothing read)
+    else:
+        for sel in SELECTS:
+            code += w(0x33FC) + w(sel) + l(0xF14000)   # move.w #sel,$f14000
+            code += w(0x30F9) + l(0xF14000)            # move.w $f14000,(a0)+
+            code += w(0x30F9) + l(0xF14002)            # move.w $f14002,(a0)+
+        code += w(0x30F9) + l(0xF00008)                # move.w LPH,(a0)+
+        code += w(0x30F9) + l(0xF0000A)                # move.w LPV,(a0)+
+        for ch in range(4):
+            code += w(0x33FC) + w(ch | 4) + l(0xF17C00)   # move.w #ch|4,$f17c00
+            code += w(0x30F9) + l(0xF17C00)               # move.w $f17c00,(a0)+
     code += w(0x5287)                       # addq.l #1,d7
     code += w(0x20C7)                       # move.l d7,(a0)+
     code += w(0x6000) + w(loop - (len(code) + 2))   # bra.w loop

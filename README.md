@@ -22,9 +22,12 @@ New, and not published yet.
   tried.
 - On Windows, Chimera's headless runner plays a project to the same memory
   and picture as on Linux. Chimera's window was tried on Linux only.
-- Not there: the controllers other than the pad (the Team
-  Tap, the rotary, the mouse, the analog and driving controllers, the light
-  gun), and link play.
+- Every controller Virtual Jaguar has: pads, the Team Tap (eight pads),
+  the Tempest 2000 rotary, the mice (ST, and Amiga through either
+  adapter), the analog joystick, the driving controller, the paddle input,
+  the 6D controller and the light gun. A test program sees each of their
+  controls; no game made for them was tried.
+- Not there: link play (two consoles linked).
 
 ## What you bring
 
@@ -36,8 +39,14 @@ replacement for the console's start-up.
 
 ## Buttons and settings
 
-- **Two controllers**: Up, Down, Left, Right, A, B, C, Option, Pause, and the
-  keypad's 0 to 9, * and #.
+- **Pads**: Up, Down, Left, Right, A, B, C, Option, Pause, and the keypad's 0
+  to 9, * and #; P1 and P2, and P3 to P8 behind Team Taps.
+- **Port 1 and Port 2** (settings) say what is in each port; each port's
+  other controllers have their own controls: the rotary's wheel (Spinner),
+  a mouse's movement and two buttons, a stick (Stick X and Y) with A to D,
+  the 6D's six axes and buttons A to G and Rezero, and in port 1 a light
+  gun (Gun X and Gun Y, a fraction of the picture, and its trigger and
+  buttons).
 - **Settings**: Machine (the console, or the console with the Jaguar CD),
   Boot (start at once, or through the console's own boot ROM,
   which refuses cartridges that are not signed, as the console does), Boot

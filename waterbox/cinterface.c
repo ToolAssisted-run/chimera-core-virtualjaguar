@@ -51,8 +51,6 @@ static const struct { const char *key, *value; } kForced[] = {
 	{ "virtualjaguar_jgd_sd", "disabled" },
 	{ "virtualjaguar_frameskip", "disabled" },
 	{ "virtualjaguar_alt_inputs", "disabled" },
-	{ "virtualjaguar_p1_device", "pad" },
-	{ "virtualjaguar_p2_device", "pad" },
 };
 
 static void take_option(const char *key, const char *def)
@@ -95,10 +93,15 @@ ECL_INVISIBLE static int16_t g_audio[MAX_SAMPLES * 2];
 static int g_audioFrames;
 
 /* ---- the controls -------------------------------------------------------
- * Two Jaguar controllers, each with its pad, A, B, C, Option, Pause and the
- * twelve keys of its keypad. They go into the Jaguar's own button tables
- * (joystick.c) at the end of the libretro layer's input step (patch 0002),
- * so its RetroPad mapping is given nothing. */
+ * What is in each of the two ports is a setting (p1_device, p2_device, as
+ * Virtual Jaguar names them). Pads - one in a port, or four behind a Team
+ * Tap - go into the Jaguar's own button tables (joystick.c) at the end of
+ * the libretro layer's input step (patch 0002), so its RetroPad mapping is
+ * given nothing for them. The other controllers are modelled by Virtual
+ * Jaguar's input layer, which asks the frontend through libretro for a
+ * mouse's movement, a stick's place, a light gun's aim; input_state()
+ * answers those from the project's controls. Players: port 1 holds P1, and
+ * behind a Team Tap P3, P4 and P5; port 2 holds P2, and P6, P7 and P8. */
 static const struct { const char *name; int button; } kPad[] = {
 	{ "Up", BUTTON_U }, { "Down", BUTTON_D }, { "Left", BUTTON_L }, { "Right", BUTTON_R },
 	{ "A", BUTTON_A }, { "B", BUTTON_B }, { "C", BUTTON_C }, { "Option", BUTTON_OPTION }, { "Pause", BUTTON_PAUSE },
@@ -106,18 +109,188 @@ static const struct { const char *name; int button; } kPad[] = {
 	{ "7", BUTTON_7 }, { "8", BUTTON_8 }, { "9", BUTTON_9 }, { "*", BUTTON_s }, { "0", BUTTON_0 }, { "#", BUTTON_d },
 };
 #define PAD_BUTTONS ((int)(sizeof kPad / sizeof kPad[0]))
-#define BUTTON_COUNT (2 * PAD_BUTTONS)
-static char g_buttonNames[BUTTON_COUNT][16];
+#define PLAYERS 8
+/* a port's extra buttons, after the eight players' pads */
+enum { kD, kE, kF, kG, kRezero, kMouseLeft, kMouseRight, kTrigger, kAuxA, kAuxB, kGunStart, kGunSelect, kOffscreen, kExtra };
+static const char *const kExtraNames[kExtra] = {
+	"D", "E", "F", "G", "Rezero", "Mouse Left", "Mouse Right",
+	"Trigger", "Aux A", "Aux B", "Gun Start", "Gun Select", "Gun Offscreen",
+};
+#define PAD_BASE 0
+#define EXTRA_BASE (PLAYERS * PAD_BUTTONS)
+#define BUTTON_COUNT (EXTRA_BASE + 2 * kExtra)
+/* a port's axes */
+enum { kSpinner, kMouseX, kMouseY, kStickX, kStickY, k6dZ, k6dTX, k6dTY, k6dTZ, kGunX, kGunY, kPortAxes };
+static const char *const kAxisNames[kPortAxes] = {
+	"Spinner", "Mouse X", "Mouse Y", "Stick X", "Stick Y", "6D Z", "6D TX", "6D TY", "6D TZ", "Gun X", "Gun Y",
+};
+#define AXIS_COUNT (2 * kPortAxes)
+static char g_buttonNames[BUTTON_COUNT][24];
+static char g_axisNames[AXIS_COUNT][24];
 static int g_held[BUTTON_COUNT];
+static int g_axis[AXIS_COUNT];
 static int g_inputRead;
 extern int chimera_input_reads;   /* joystick.c (patch 0003) */
 
+/* what is in each port */
+enum { kPadDev, kTeamTap, kRotary, kMouse, kAnalog, kDriving, kPaddle, k6D, kGun };
+static int g_device[2];
+
+static int device_setting(const char *name)
+{
+	char v[32] = "pad";
+	wbx_setting_str(name, v, sizeof v);
+	if (!strcmp(v, "teamtap")) return kTeamTap;
+	if (!strcmp(v, "rotary")) return kRotary;
+	if (!strncmp(v, "mouse", 5)) return kMouse;
+	if (!strcmp(v, "analog")) return kAnalog;
+	if (!strcmp(v, "driving")) return kDriving;
+	if (!strcmp(v, "paddle")) return kPaddle;
+	if (!strcmp(v, "6d")) return k6D;
+	if (!strcmp(v, "lightgun")) return kGun;
+	return kPadDev;
+}
+
+/* player p (0-7) is in port p's... port 0 holds players 0, 2, 3, 4 and
+ * port 1 holds 1, 5, 6, 7; the socket is the place behind the Team Tap */
+static int port_of(int player) { return player == 0 || (player >= 2 && player <= 4) ? 0 : 1; }
+static int socket_of(int player) { return player <= 1 ? 0 : player <= 4 ? player - 1 : player - 4; }
+
+static int pad_held(int player, int b) { return g_held[PAD_BASE + player * PAD_BUTTONS + b]; }
+static int extra_held(int port, int e) { return g_held[EXTRA_BASE + port * kExtra + e]; }
+static int axis_value(int port, int a) { return g_axis[port * kPortAxes + a]; }
+
+/* is button i of the panel live, given what is in the ports? */
+static int button_active(int i)
+{
+	if (i < EXTRA_BASE)
+	{
+		int player = i / PAD_BUTTONS, b = i % PAD_BUTTONS, port = port_of(player), dev = g_device[port];
+		if (socket_of(player) > 0) return dev == kTeamTap;
+		switch (dev)
+		{
+		case kPadDev: case kTeamTap: case kPaddle: return 1;
+		case kRotary: return b > 3;   /* the wheel takes the place of the pad's directions */
+		case kAnalog: case kDriving: return b <= 6;   /* the hat and A, B, C */
+		case k6D: return b >= 4 && b <= 6;   /* A, B, C */
+		default: return 0;
+		}
+	}
+	int port = (i - EXTRA_BASE) / kExtra, e = (i - EXTRA_BASE) % kExtra, dev = g_device[port];
+	switch (e)
+	{
+	case kD: return dev == kAnalog || dev == kDriving || dev == k6D;
+	case kE: case kF: case kG: case kRezero: return dev == k6D;
+	case kMouseLeft: case kMouseRight: return dev == kMouse;
+	default: return dev == kGun;
+	}
+}
+
+static int axis_active(int i)
+{
+	int port = i / kPortAxes, a = i % kPortAxes, dev = g_device[port];
+	switch (a)
+	{
+	case kSpinner: return dev == kRotary;
+	case kMouseX: case kMouseY: return dev == kMouse;
+	case kStickX: case kStickY: return dev == kAnalog || dev == kDriving || dev == kPaddle || dev == k6D;
+	case kGunX: case kGunY: return dev == kGun;
+	default: return dev == k6D;
+	}
+}
+
 void chimera_fill_joypads(void)
 {
-	for (int i = 0; i < PAD_BUTTONS; i++)
+	for (int player = 0; player < PLAYERS; player++)
 	{
-		if (g_held[i]) joypad0Buttons[kPad[i].button] = 0xff;
-		if (g_held[PAD_BUTTONS + i]) joypad1Buttons[kPad[i].button] = 0xff;
+		int port = port_of(player), dev = g_device[port], sock = socket_of(player);
+		if (sock > 0 && dev != kTeamTap) continue;
+		if (dev != kPadDev && dev != kTeamTap && dev != kPaddle && dev != kRotary) continue;
+		uint8_t *table = port == 0 ? joypad0Buttons : joypad1Buttons;
+		for (int b = 0; b < PAD_BUTTONS; b++)
+		{
+			if (dev == kRotary && b <= 3) continue;
+			if (pad_held(player, b)) table[sock * JOYPAD_SOCKET_SLOTS + kPad[b].button] = 0xff;
+		}
+	}
+}
+
+/* the libretro layer's questions about a controller other than a pad */
+static int16_t controller_state(unsigned port, unsigned device, unsigned index, unsigned id)
+{
+	if (port > 1) return 0;
+	int dev = g_device[port];
+	int player = (int)port;   /* P1 or P2: socket 0 */
+	switch (device & RETRO_DEVICE_MASK)
+	{
+	case RETRO_DEVICE_JOYPAD:
+		/* the switches of the analog, driving and 6D controllers */
+		if (dev != kAnalog && dev != kDriving && dev != k6D) return 0;
+		switch (id)
+		{
+		case RETRO_DEVICE_ID_JOYPAD_A: return pad_held(player, 4);
+		case RETRO_DEVICE_ID_JOYPAD_B: return pad_held(player, 5);
+		case RETRO_DEVICE_ID_JOYPAD_Y: return pad_held(player, 6);
+		case RETRO_DEVICE_ID_JOYPAD_X: return extra_held(port, kD);
+		case RETRO_DEVICE_ID_JOYPAD_UP: return dev != k6D && pad_held(player, 0);
+		case RETRO_DEVICE_ID_JOYPAD_DOWN: return dev != k6D && pad_held(player, 1);
+		case RETRO_DEVICE_ID_JOYPAD_LEFT: return dev != k6D && pad_held(player, 2);
+		case RETRO_DEVICE_ID_JOYPAD_RIGHT: return dev != k6D && pad_held(player, 3);
+		case RETRO_DEVICE_ID_JOYPAD_L3: return dev == k6D && extra_held(port, kE);
+		case RETRO_DEVICE_ID_JOYPAD_R3: return dev == k6D && extra_held(port, kF);
+		case RETRO_DEVICE_ID_JOYPAD_START: return dev == k6D && extra_held(port, kG);
+		case RETRO_DEVICE_ID_JOYPAD_SELECT: return dev == k6D && extra_held(port, kRezero);
+		default: return 0;
+		}
+	case RETRO_DEVICE_MOUSE:
+		if (dev == kRotary) return id == RETRO_DEVICE_ID_MOUSE_X ? (int16_t)axis_value(port, kSpinner) : 0;
+		if (dev != kMouse) return 0;
+		switch (id)
+		{
+		case RETRO_DEVICE_ID_MOUSE_X: return (int16_t)axis_value(port, kMouseX);
+		case RETRO_DEVICE_ID_MOUSE_Y: return (int16_t)axis_value(port, kMouseY);
+		case RETRO_DEVICE_ID_MOUSE_LEFT: return extra_held(port, kMouseLeft);
+		case RETRO_DEVICE_ID_MOUSE_RIGHT: return extra_held(port, kMouseRight);
+		default: return 0;
+		}
+	case RETRO_DEVICE_ANALOG:
+		if (dev != kAnalog && dev != kDriving && dev != kPaddle && dev != k6D) return 0;
+		if (index == RETRO_DEVICE_INDEX_ANALOG_LEFT)
+			return (int16_t)axis_value(port, id == RETRO_DEVICE_ID_ANALOG_X ? kStickX : kStickY);
+		if (index == RETRO_DEVICE_INDEX_ANALOG_RIGHT && dev == k6D)
+			return (int16_t)axis_value(port, id == RETRO_DEVICE_ID_ANALOG_X ? k6dTX : k6dTZ);
+		if (index == RETRO_DEVICE_INDEX_ANALOG_BUTTON && dev == k6D)
+		{
+			/* Z is R2 - L2 and TY is R - L in the layer's reading */
+			int z = axis_value(port, k6dZ), ty = axis_value(port, k6dTY);
+			switch (id)
+			{
+			case RETRO_DEVICE_ID_JOYPAD_R2: return (int16_t)(z > 0 ? z : 0);
+			case RETRO_DEVICE_ID_JOYPAD_L2: return (int16_t)(z < 0 ? -z : 0);
+			case RETRO_DEVICE_ID_JOYPAD_R: return (int16_t)(ty > 0 ? ty : 0);
+			case RETRO_DEVICE_ID_JOYPAD_L: return (int16_t)(ty < 0 ? -ty : 0);
+			default: return 0;
+			}
+		}
+		return 0;
+	case RETRO_DEVICE_LIGHTGUN:
+		if (dev != kGun) return 0;
+		switch (id)
+		{
+		/* Chimera's pointer is a fraction of the picture, 0 to 65535;
+		 * libretro's is -32768 to 32767 across it */
+		case RETRO_DEVICE_ID_LIGHTGUN_SCREEN_X: return (int16_t)(axis_value(port, kGunX) - 32768);
+		case RETRO_DEVICE_ID_LIGHTGUN_SCREEN_Y: return (int16_t)(axis_value(port, kGunY) - 32768);
+		case RETRO_DEVICE_ID_LIGHTGUN_TRIGGER: return extra_held(port, kTrigger);
+		case RETRO_DEVICE_ID_LIGHTGUN_AUX_A: return extra_held(port, kAuxA);
+		case RETRO_DEVICE_ID_LIGHTGUN_AUX_B: return extra_held(port, kAuxB);
+		case RETRO_DEVICE_ID_LIGHTGUN_START: return extra_held(port, kGunStart);
+		case RETRO_DEVICE_ID_LIGHTGUN_SELECT: return extra_held(port, kGunSelect);
+		case RETRO_DEVICE_ID_LIGHTGUN_IS_OFFSCREEN: return extra_held(port, kOffscreen);
+		default: return 0;
+		}
+	default:
+		return 0;
 	}
 }
 
@@ -256,12 +429,12 @@ static size_t audio_batch(const int16_t *data, size_t frames)
 
 static void input_poll(void) {}
 
-/* The libretro layer's own RetroPad mapping is given nothing: the controls
- * reach the Jaguar's tables directly (chimera_fill_joypads). */
+/* The libretro layer's own RetroPad mapping is given nothing for a pad (the
+ * pads reach the Jaguar's tables directly, chimera_fill_joypads); the
+ * other controllers' questions are answered by controller_state. */
 static int16_t input_state(unsigned port, unsigned device, unsigned index, unsigned id)
 {
-	(void)port; (void)device; (void)index; (void)id;
-	return 0;
+	return controller_state(port, device, index, id);
 }
 
 /* ---- the memory --------------------------------------------------------- */
@@ -324,9 +497,20 @@ ECL_EXPORT int Init(void)
 		snprintf(g_loadError, sizeof g_loadError, "no game was given");
 		return 0;
 	}
-	for (int p = 0; p < 2; p++)
+	for (int p = 0; p < PLAYERS; p++)
 		for (int i = 0; i < PAD_BUTTONS; i++)
-			snprintf(g_buttonNames[p * PAD_BUTTONS + i], sizeof g_buttonNames[0], "P%d %s", p + 1, kPad[i].name);
+			snprintf(g_buttonNames[PAD_BASE + p * PAD_BUTTONS + i], sizeof g_buttonNames[0], "P%d %s", p + 1, kPad[i].name);
+	for (int port = 0; port < 2; port++)
+	{
+		for (int e = 0; e < kExtra; e++)
+			snprintf(g_buttonNames[EXTRA_BASE + port * kExtra + e], sizeof g_buttonNames[0], "P%d %s", port + 1, kExtraNames[e]);
+		for (int a = 0; a < kPortAxes; a++)
+			snprintf(g_axisNames[port * kPortAxes + a], sizeof g_axisNames[0], "P%d %s", port + 1, kAxisNames[a]);
+	}
+	g_device[0] = device_setting("p1_device");
+	g_device[1] = device_setting("p2_device");
+	if (g_device[0] == kMouse) g_device[0] = kPadDev;   /* the mice go in port 2 */
+	if (g_device[1] == kGun) g_device[1] = kPadDev;     /* the light gun in port 1 */
 	g_frameCount = 0;
 
 	retro_set_environment(environment);
@@ -400,16 +584,24 @@ static int finish_init(void)
 
 ECL_EXPORT int GetButtonCount(void) { return BUTTON_COUNT; }
 ECL_EXPORT const char *GetButtonName(int32_t i) { return i >= 0 && i < BUTTON_COUNT ? g_buttonNames[i] : ""; }
-ECL_EXPORT int IsButtonActive(int32_t i) { return i >= 0 && i < BUTTON_COUNT; }
+ECL_EXPORT int IsButtonActive(int32_t i) { return i >= 0 && i < BUTTON_COUNT && button_active(i); }
 ECL_EXPORT void SetButton(int32_t i, int32_t state)
 {
 	if (i >= 0 && i < BUTTON_COUNT) g_held[i] = state != 0;
 }
 
-ECL_EXPORT int GetAxisCount(void) { return 0; }
-ECL_EXPORT const char *GetAxisName(int32_t i) { (void)i; return ""; }
-ECL_EXPORT int IsAxisActive(int32_t i) { (void)i; return 0; }
-ECL_EXPORT void SetAxis(int32_t i, int32_t value) { (void)i; (void)value; }
+ECL_EXPORT int GetAxisCount(void) { return AXIS_COUNT; }
+ECL_EXPORT const char *GetAxisName(int32_t i) { return i >= 0 && i < AXIS_COUNT ? g_axisNames[i] : ""; }
+ECL_EXPORT int IsAxisActive(int32_t i) { return i >= 0 && i < AXIS_COUNT && axis_active(i); }
+ECL_EXPORT void SetAxis(int32_t i, int32_t value)
+{
+	if (i < 0 || i >= AXIS_COUNT) return;
+	int a = i % kPortAxes;
+	int lo = -32768, hi = 32767;
+	if (a == kSpinner || a == kMouseX || a == kMouseY) { lo = -128; hi = 127; }
+	if (a == kGunX || a == kGunY) { lo = 0; hi = 65535; }
+	g_axis[i] = value < lo ? lo : value > hi ? hi : value;
+}
 
 ECL_EXPORT void FrameAdvance(uint64_t packed)
 {
