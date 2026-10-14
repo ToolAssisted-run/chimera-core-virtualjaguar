@@ -9,9 +9,10 @@ name: chimera waterbox core
 # public-domain demos, so here:
 #   - Virtual Jaguar's source is the pinned commit with the patches applied,
 #     and the package declares the controls the core has;
-#   - with that program and those demos the sandboxed core gives the native
-#     build's results: every button of both controllers, lag frames, the
-#     console's boot ROM, PAL and savestates;
+#   - with that program (on a cartridge and on a CD the tests write) and
+#     those demos the sandboxed core gives the native build's results: every
+#     button of both controllers, lag frames, the console's boot ROM, PAL,
+#     the Jaguar CD (and upstream's synthetic CHD) and savestates;
 #   - the package runs that program and a demo in Chimera's headless runner
 #     and in its window;
 #   - Chimera's own checks of the package pass.
@@ -132,7 +133,8 @@ jobs:
           [ "$rc" -eq 0 ]
           for t in source:patched package:fresh package:controls jag:runs jag:buttons jag:sandbox \
                    jag:presses-change-the-run jag:lag jag:state-every-frame jag:state-other-box \
-                   demo:runs demo:sandbox demo:boot-rom demo:pal demo:state-rewind refused:no-game engine:jag; do
+                   demo:runs demo:sandbox demo:boot-rom demo:pal demo:state-rewind cd:runs cd:sandbox cd:states cd:chd \
+                   refused:no-game engine:jag engine:jagcd; do
             grep -q "^$t  *PASS " gate.out || { echo "$t did not pass"; exit 1; }
           done
 

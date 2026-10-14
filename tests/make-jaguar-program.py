@@ -4,6 +4,12 @@ the controllers for the Virtual Jaguar core's tests. It needs no file of
 anyone's.
 
 usage: make-jaguar-program.py <out.j64> [nopad]
+       make-jaguar-program.py --cd <folder> [nopad]
+
+With --cd it writes a Jaguar CD instead, disc.cue with track01.bin and
+track02.bin in the folder: a silent first session, and in the second the
+Atari boot header with the same program after it, loaded at $4000 (the
+layout upstream's tests/tools/gen_synth_jagcd_vpregap.py writes).
 
 The program, hand-assembled below (68000 machine code), starts at $802000,
 where the high-level BIOS jumps. For ever, it:
@@ -52,7 +58,39 @@ def program(nopad):
     return bytes(code)
 
 
+SECTOR = 2352
+
+
+def swap16(b):
+    out = bytearray(len(b))
+    out[0::2] = b[1::2]
+    out[1::2] = b[0::2]
+    return bytes(out)
+
+
+def write_cd(folder, nopad):
+    import os
+    os.makedirs(folder, exist_ok=True)
+    code = program(nopad)
+    code += bytes(len(code) % 2)
+    track = bytearray(4 * SECTOR)
+    track[0x42:0x42 + 32] = b"ATARI APPROVED DATA HEADER ATRI "
+    track[0x62:0x66] = l(0x4000)               # load address
+    track[0x66:0x6A] = l(len(code))            # length
+    track[0x6A:0x6A + len(code)] = code
+    # on the disc, the bytes are in the order the Jaguar's I2S bus has them
+    open(os.path.join(folder, "track02.bin"), "wb").write(swap16(bytes(track)))
+    open(os.path.join(folder, "track01.bin"), "wb").write(bytes(4 * SECTOR))
+    cue = ["REM SESSION 01", 'FILE "track01.bin" BINARY', "  TRACK 01 AUDIO", "    INDEX 01 00:00:00",
+           "REM SESSION 02", 'FILE "track02.bin" BINARY', "  TRACK 02 AUDIO", "    INDEX 01 00:00:00"]
+    open(os.path.join(folder, "disc.cue"), "w", newline="\n").write("\n".join(cue) + "\n")
+    print("%s: a disc with %d bytes of code%s" % (folder, len(code), " (no controller read)" if nopad else ""))
+
+
 def main():
+    if sys.argv[1] == "--cd":
+        write_cd(sys.argv[2], len(sys.argv) > 3 and sys.argv[3] == "nopad")
+        return
     out = sys.argv[1]
     nopad = len(sys.argv) > 2 and sys.argv[2] == "nopad"
     cart = bytearray(b"\xff" * 0x100000)

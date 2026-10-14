@@ -47,7 +47,8 @@ waterbox/setup-guest.sh -m <miniBox> && ninja -C build/meson-guest
 
 Both runners take a work folder that holds what the sandbox would see: the
 cartridge under its name, a file `slots` (`{"cart":["game.j64"]}`) and a
-file `settings` (`{}` or, say, `{"pal":"enabled"}`).
+file `settings` (`{}` or, say, `{"pal":"enabled"}`); for the CD, the disc's
+files, `{"disc":["disc.cue"]}` and `{"machine":"jaguarcd"}`.
 `waterbox/gate-harness.h` lists the options they share (`--frames`,
 `--report`, `--press`, `--axis`, `--vid-out`, `--dump-domain`,
 `--savedata-out`, `--list-panel`). `CHIMERA_VJ_LOG=1` makes the native

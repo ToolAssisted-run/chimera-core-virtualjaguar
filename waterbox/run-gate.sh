@@ -115,12 +115,13 @@ folder pr '{}' "$work/carts/prog.j64"
 folder qu '{}' "$work/carts/quiet.j64"
 
 "$native" "$work/pr" --frames 1 --list-panel > "$work/panel.out" 2> /dev/null
-check "package:controls" "the package declares the core's own $(grep -c '^panel' "$work/panel.out") buttons, in the core's order" \
+check "package:controls" "the package declares the core's own $(grep -c '^panel' "$work/panel.out") buttons, in the core's order, for both machines" \
 	python3 - "$here/waterbox.config" "$work/panel.out" <<'PY'
 import json, sys
 cfg = json.load(open(sys.argv[1]))
 buttons = [l[l.index("'") + 1:l.rindex("'")] for l in open(sys.argv[2]) if l.startswith("panel ")]
-sys.exit(0 if cfg["input"]["buttons"] == buttons and len(buttons) == 42 else 1)
+m = cfg["machines"]
+sys.exit(0 if len(m) == 2 and all(x["input"]["buttons"] == buttons for x in m) and len(buttons) == 42 else 1)
 PY
 
 nat pr-idle pr --frames 300 --report 25 --dump-domain "Main RAM" "$work/pr-idle.ram"
@@ -184,7 +185,7 @@ done
 check "demo:runs" "upstream's two public-domain demos run: YARC $(pictures "$work/yarc.out") and JagNICCC 2000 $(pictures "$work/jagniccc.out") different pictures in 36 reports" \
 	[ "$(pictures "$work/yarc.out")" -gt 10 -a "$(pictures "$work/jagniccc.out")" -gt 10 ]
 check "demo:sandbox" "native and sandbox print the same 36 digests for each" \
-	sh -c "cmp -s '$work/yarc.stream' '$work/yarc-box.stream' && cmp -s '$work/jagniccc.stream' '$work/jagniccc-box.stream' && [ -s '$work/yarc.stream' ]"
+	sh -c "cmp -s '$work/yarc.stream' '$work/yarc-box.stream' && cmp -s '$work/jagniccc.stream' '$work/jagniccc-box.stream' && [ -s '$work/yarc.stream' ] && [ -s '$work/jagniccc.stream' ]"
 check "demo:boot-rom" "through the console's own boot ROM (Boot 'enabled') both start, another run than without it: YARC $(pictures "$work/yarc-bios.out") and JagNICCC $(pictures "$work/jagniccc-bios.out") pictures" \
 	sh -c "[ $(pictures "$work/yarc-bios.out") -gt 10 ] && [ $(pictures "$work/jagniccc-bios.out") -gt 10 ] && ! cmp -s '$work/yarc-bios.stream' '$work/yarc.stream'"
 check "demo:pal" "a PAL console hands out 960 pairs of samples a frame (48 kHz at 50 frames a second; $(field "$work/yarc-pal.out" aud)), an NTSC one 800 ($(field "$work/yarc.out" aud))" \
@@ -192,6 +193,37 @@ check "demo:pal" "a PAL console hands out 960 pairs of samples a frame (48 kHz a
 box rewind yarc --frames 1600 --report 5 --rewind
 check "demo:state-rewind" "a state kept at frame 800 and loaded at 1200: the frames after the load repeat those after the save" \
 	repeats "$work/rewind.out" 800 1200 400 5
+
+# ------------------------------------------------- the Jaguar CD
+# the same program on a disc the script writes (tests/make-jaguar-program.py
+# --cd), started by Virtual Jaguar's replacement for the CD's start-up
+python3 "$root/tests/make-jaguar-program.py" --cd "$work/cdfiles" > /dev/null
+mkdir -p "$work/cd"
+for f in disc.cue track01.bin track02.bin; do ln -sf "$work/cdfiles/$f" "$work/cd/$f"; done
+printf '{"disc":["disc.cue"]}' > "$work/cd/slots"; printf '{"machine":"jaguarcd"}' > "$work/cd/settings"
+nat cd-idle cd --frames 300 --report 25 --dump-domain "Main RAM" "$work/cd-idle.ram"
+nat cd-a cd --frames 300 --press 4:100:300 --dump-domain "Main RAM" "$work/cd-a.ram"
+nat cd-hash cd --frames 300 --press 41:100:300 --dump-domain "Main RAM" "$work/cd-hash.ram"
+check "cd:runs" "a disc this script writes boots on the Jaguar CD: the program's count reached $(count "$work/cd-idle.ram") in 300 frames; P1 A and P2 # reach it ($(block "$work/cd-a.ram"), $(block "$work/cd-hash.ram"))" \
+	sh -c "[ $(count "$work/cd-idle.ram") -gt 1000 ] && [ '$(block "$work/cd-idle.ram")' = ffefff7fffddff7fffbbff7fff77ff7f ] && [ '$(block "$work/cd-a.ram")' != '$(block "$work/cd-idle.ram")' ] && [ '$(block "$work/cd-hash.ram")' != '$(block "$work/cd-idle.ram")' ]"
+cdrun="--frames 300 --report 10 --press 4:100:40 --press 30:150:30"
+nat cd cd $cdrun
+box cd-box cd $cdrun
+box cd-rerecord cd $cdrun --rerecord
+box cd-session cd $cdrun --session
+for n in cd cd-box cd-rerecord cd-session; do stream "$work/$n.out" > "$work/$n.stream"; done
+check "cd:sandbox" "native and sandbox print the same $(wc -l < "$work/cd.stream") digests for the disc, with presses" same "$work/cd.stream" "$work/cd-box.stream"
+check "cd:states" "a state saved and loaded every frame, and a state moved to a new sandbox, change nothing on the CD" \
+	sh -c "[ -s '$work/cd-box.stream' ] && cmp -s '$work/cd-box.stream' '$work/cd-rerecord.stream' && cmp -s '$work/cd-box.stream' '$work/cd-session.stream'"
+# upstream's synthetic CHD: two sessions, an Atari boot header and a stub
+mkdir -p "$work/chd"
+ln -sf "$intree/synth_jagcd.chd" "$work/chd/synth_jagcd.chd"
+printf '{"disc":["synth_jagcd.chd"]}' > "$work/chd/slots"; printf '{"machine":"jaguarcd"}' > "$work/chd/settings"
+nat chd chd --frames 120 --report 30
+box chd-box chd --frames 120 --report 30
+stream "$work/chd.out" > "$work/chd.stream"; stream "$work/chd-box.out" > "$work/chd-box.stream"
+check "cd:chd" "upstream's synthetic CHD (synth_jagcd.chd) opens and starts, and the sandbox gives the native build's $(wc -l < "$work/chd.stream") digests" \
+	sh -c "[ \$(wc -l < '$work/chd.stream') = 4 ] && cmp -s '$work/chd.stream' '$work/chd-box.stream'"
 
 # ------------------------------------------------- what is refused
 mkdir -p "$work/none"
@@ -212,8 +244,18 @@ if [ -n "$chimera_root" ] && [ -x "$runner" ] && [ -f "$package" ]; then
 	box eng pr --frames 300 --press "$(index pr "P1 A")":200:101 --press "$(index pr "P2 #")":150:151 --dump-domain "Main RAM" "$work/eng.ram"
 	check "engine:jag" "a project of the program with presses plays in Chimera's headless runner to the sandbox runner's main RAM ($(wc -c < "$work/eng.ram" 2> /dev/null) bytes; the program read $(block "$work/engine.ram")), another than the idle run's" \
 		sh -c "cmp -s '$work/engine.ram' '$work/eng.ram' && [ '$(block "$work/engine.ram")' != '$(block "$work/pr-idle.ram")' ]"
+	mkdir -p "$work/projcd"
+	cp "$work/cdfiles/disc.cue" "$work/cdfiles/track01.bin" "$work/cdfiles/track02.bin" "$work/projcd/"
+	python3 "$root/tests/make-project.py" "$package" "$work/projcd/cd.chimeraProject" 300 machine=jaguarcd \
+		"press=P1 B:99:201" panel="$work/panel.out" -- disc="$work/projcd/disc.cue" > /dev/null
+	"$runner" --project "$work/projcd/cd.chimeraProject" "$package" --files "$work/projcd" --frames 300 \
+		--dump "Main RAM=$work/engine-cd.ram" > "$work/engine-cd.log" 2>&1
+	box engcd cd --frames 300 --press "$(index pr "P1 B")":100:201 --dump-domain "Main RAM" "$work/engcd.ram"
+	check "engine:jagcd" "a project of the disc (its .cue and two track files) plays in Chimera's headless runner to the sandbox runner's main RAM (the program read $(block "$work/engine-cd.ram" | cut -c1-8)), another than the idle run's" \
+		sh -c "cmp -s '$work/engine-cd.ram' '$work/engcd.ram' && [ '$(block "$work/engine-cd.ram")' != '$(block "$work/cd-idle.ram")' ]"
 else
 	report "engine:jag" SKIP "needs CHIMERA_ROOT with build/dll/chimera-run and build/Cores/virtualjaguar.chimeraCore"
+	report "engine:jagcd" SKIP "needs CHIMERA_ROOT with build/dll/chimera-run and build/Cores/virtualjaguar.chimeraCore"
 fi
 
 # ------------------------------------------------- homebrew

@@ -67,6 +67,9 @@ purpose once and seen to fail.
   mapping. The test `package:controls` compares the panel with
   `waterbox.config`; `jag:buttons` holds that each button reaches the
   machine as one bit of its own.
+- **The test program keeps a press only while it lasts.** A test that
+  reads memory at the end holds the button to the end
+  (`--press F:N` holds frames F to F+N-1).
 - **The console's real boot ROM refuses unsigned cartridges**, as the
   console does: the test cartridge runs with Boot 'disabled' only; the
   demos in upstream's tree are signed and test the boot ROM.

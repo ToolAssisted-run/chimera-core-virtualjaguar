@@ -14,7 +14,27 @@
     "cof",
     "bin"
    ],
-   "help": "The game's cartridge: a .j64 or .rom file (or .jag, .abs, .cof, .bin for homebrew)."
+   "help": "The game's cartridge: a .j64 or .rom file (or .jag, .abs, .cof, .bin for homebrew).",
+   "exposedWhen": {
+    "setting": "machine",
+    "is": "jaguar"
+   }
+  },
+  {
+   "id": "disc",
+   "title": "Disc",
+   "min": 1,
+   "max": 1,
+   "formats": [
+    "cue",
+    "chd",
+    "cdi"
+   ],
+   "help": "The game's Jaguar CD: a .cue file with the track files it names beside it, a .chd file, or a .cdi file.",
+   "exposedWhen": {
+    "setting": "machine",
+    "is": "jaguarcd"
+   }
   },
   {
    "id": "savedata",
@@ -23,12 +43,13 @@
    "max": 1,
    "formats": [
     "eeprom",
+    "memtrack",
     "srm",
     "sav"
    ],
-   "help": "What the cartridge's save memory (its EEPROM) holds at the start, for a project that begins from a saved game: a file as Emulator > Export Save Data... writes it (jaguar.eeprom), or a RetroArch .srm. The file is never changed. Leave this empty to start with an empty save memory.",
-   "namePattern": "\\.(eeprom|srm|sav)$",
-   "nameHelp": "a save file is identified by its extension, .eeprom, .srm or .sav."
+   "help": "What the machine's save memory holds at the start, for a project that begins from a saved game: a file as Emulator > Export Save Data... writes it (jaguar.eeprom for a cartridge, jaguarcd.memtrack for the CD, which holds the Memory Track's saves), or a RetroArch .srm. The file is never changed. Leave this empty to start with an empty save memory.",
+   "namePattern": "\\.(eeprom|memtrack|srm|sav)$",
+   "nameHelp": "a save file is identified by its extension, .eeprom, .memtrack, .srm or .sav."
   }
  ]
 }

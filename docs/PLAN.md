@@ -115,9 +115,39 @@ lighting up the screen only. Not looked into.
 
 ## Not done, and why
 
-- **The Jaguar CD**: Virtual Jaguar runs it (cue, cdi, chd); not wired up
-  yet. Upstream's tree has synthetic CD images to test with.
 - **The other controllers** (Team Tap, rotary, mice, analog, driving, light
   gun): pads only for now.
 - **Link play**: the core is one machine, and has no sockets.
 - **A commercial game**: none was tried (the owner has none).
+
+## The Jaguar CD (2026-10-14)
+
+- **A second machine, `JAGCD` ("Atari Jaguar CD")**, chosen by the Machine
+  setting (`jaguar` or `jaguarcd`); the same controls. Its slot is a Disc
+  (a .cue with its track files, a .chd or a .cdi), given to Virtual Jaguar
+  by its name as upstream wants (it reads the tracks itself). The CD starts
+  through Virtual Jaguar's replacement for the CD's start-up (its default);
+  the real CD BIOS is not offered as a setting yet.
+- **Save data**: a CD console's save memory is the EEPROM and the Memory
+  Track together (131,328 bytes), exported as `jaguarcd.memtrack`.
+- **A test disc**: `tests/make-jaguar-program.py --cd` writes `disc.cue`
+  with two tracks: a silent first session, and in the second the Atari
+  boot header with the same test program after it, loaded at $4000 (the
+  layout of upstream's own synthetic discs, the bytes swapped as the
+  Jaguar's bus has them).
+
+Measured: the test disc boots and its program sees P1 A and P2 #; native
+and sandbox print the same 30 digests with presses; a state saved and
+loaded every frame and one moved to a new sandbox change nothing;
+upstream's synthetic CHD opens and starts in both; a project of the disc
+(the .cue and its two tracks) plays in Chimera's headless runner to the
+sandbox runner's main RAM. With the Machine setting ignored on purpose,
+four of these tests failed; `cd:states` passed on two empty runs, and now
+requires a run that got somewhere.
+
+Counts: the test script 25 passed, 0 failed, 0 skipped; the window test 3
+passed.
+
+A trap for whoever writes the next test: the test program keeps a press
+only while it lasts (`--press F:N` holds frames F to F+N-1), so a test
+that reads memory at the end holds the button to the end.

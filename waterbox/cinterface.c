@@ -271,9 +271,10 @@ static int g_memoryCount;
 
 /* ---- the files ---------------------------------------------------------- */
 static char g_game[512];
+static int g_cd;   /* a Jaguar CD: the disc is read by its name, as upstream wants */
 
-/* the save file a project starts from: the first .eeprom/.srm/.sav in the
- * Save data slot */
+/* the save file a project starts from: the Save data slot's file (an
+ * exported .eeprom or .memtrack, or a RetroArch .srm) */
 static int read_save(uint8_t *into, size_t size)
 {
 	char name[512];
@@ -295,11 +296,18 @@ ECL_EXPORT const char *GetLoadError(void) { return g_loadError; }
 ECL_EXPORT const char *SuggestSettings(void) { return "{\"values\":{},\"note\":\"\",\"firmware\":[]}"; }
 ECL_EXPORT const char *DescribeDips(void) { return ""; }
 
+static int finish_init(void);
+
 ECL_EXPORT int Init(void)
 {
 	g_loadError[0] = '\0';
-	if (wbx_slot_count("cart") > 0)
-		wbx_slot_name("cart", 0, g_game, sizeof g_game);
+	/* the Machine setting: a cartridge console, or one with the Jaguar CD */
+	char machine[32] = "jaguar";
+	wbx_setting_str("machine", machine, sizeof machine);
+	g_cd = !strcmp(machine, "jaguarcd");
+	const char *slot = g_cd ? "disc" : "cart";
+	if (wbx_slot_count(slot) > 0)
+		wbx_slot_name(slot, 0, g_game, sizeof g_game);
 	if (!g_game[0])
 	{
 		/* a game opened with no project is mounted under its own name */
@@ -332,7 +340,18 @@ ECL_EXPORT int Init(void)
 		for (int i = 0; i < g_optionCount; i++)
 			fprintf(stderr, "option %s=%s\n", g_options[i].key, g_options[i].value);
 
-	/* the game is read here and handed over whole */
+	if (g_cd)
+	{
+		struct retro_game_info disc = { g_game, NULL, 0, NULL };
+		if (!retro_load_game(&disc))
+		{
+			snprintf(g_loadError, sizeof g_loadError, "the emulator did not start with the disc %s", g_game);
+			return 0;
+		}
+		return finish_init();
+	}
+
+	/* a cartridge is read here and handed over whole */
 	FILE *f = fopen(g_game, "rb");
 	if (!f)
 	{
@@ -356,6 +375,12 @@ ECL_EXPORT int Init(void)
 		snprintf(g_loadError, sizeof g_loadError, "the emulator did not start with %s", g_game);
 		return 0;
 	}
+	return finish_init();
+}
+
+/* after the game is loaded: the rate, the save memory, the memory domains */
+static int finish_init(void)
+{
 	struct retro_system_av_info av;
 	retro_get_system_av_info(&av);
 	g_fps = av.timing.fps;
@@ -420,8 +445,10 @@ ECL_EXPORT const int64_t *GetBusRanges(int32_t bus) { (void)bus; return NULL; }
 ECL_EXPORT const uint8_t *ReadBus(int32_t bus, int64_t addr, int32_t len) { (void)bus; (void)addr; (void)len; return NULL; }
 ECL_EXPORT void PokeBus(int32_t bus, int32_t addr, int32_t value) { (void)bus; (void)addr; (void)value; }
 
-/* Export Save Data: the cartridge's save memory (EEPROM), when it has one */
+/* Export Save Data: the machine's save memory, when it has one */
 ECL_EXPORT int32_t GetSaveDataFileCount(void) { return retro_get_memory_size(RETRO_MEMORY_SAVE_RAM) > 0 ? 1 : 0; }
-ECL_EXPORT const char *GetSaveDataFileName(int32_t i) { return i == 0 ? "jaguar.eeprom" : ""; }
+/* a cartridge console's is its EEPROM; a CD console's also holds the
+ * Memory Track's */
+ECL_EXPORT const char *GetSaveDataFileName(int32_t i) { return i == 0 ? (g_cd ? "jaguarcd.memtrack" : "jaguar.eeprom") : ""; }
 ECL_EXPORT int64_t GetSaveDataFileSize(int32_t i) { return i == 0 ? (int64_t)retro_get_memory_size(RETRO_MEMORY_SAVE_RAM) : 0; }
 ECL_EXPORT const uint8_t *GetSaveDataFileBuffer(int32_t i) { return i == 0 ? retro_get_memory_data(RETRO_MEMORY_SAVE_RAM) : NULL; }
