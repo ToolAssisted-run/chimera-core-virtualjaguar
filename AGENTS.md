@@ -67,7 +67,8 @@ purpose once and seen to fail.
   mapping; the other controllers are upstream's models, fed through
   `controller_state()`'s answers to the layer's libretro questions. The test `package:controls` compares the panel with
   `waterbox.config`; `jag:buttons` holds that each button reaches the
-  machine as one bit of its own.
+  machine as one bit of its own; `package:key-names` that the default
+  bindings name keys Chimera knows (`tests/check-key-names.py`).
 - **Read memory with `od -v`**: without it a repeated line prints as `*`.
 - **A quadrature device moved by a multiple of 4** comes back to the same
   phase: test a mouse or the wheel with 5 steps a frame.

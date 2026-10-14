@@ -232,3 +232,20 @@ headless runner plays a project of the test disc through the console's CD
 BIOS (1,300 frames, P1 A held at the end) and one of the test cartridge
 with an analog stick in port 1 and a mouse in port 2, both moved in the
 movie, to the Linux runner's main RAM and picture.
+
+## 2026-10-14: the default bindings name keys Chimera has
+
+**Found.** Chimera hands a key to the bindings under one name only: the
+name DistinctKeyNameOverrides gives it ("Number1", "Enter", "Backtick",
+"KeypadAdd"), or else its DistinctKey name (Input.cs). By default it also
+reads the left and right Shift, Ctrl and Alt as one key each, "Shift",
+"Ctrl" and "Alt" (Config.MergeLAndRModifierKeys). A binding to any other
+name never fires, so those controls shipped unbound.
+
+**Decided.** The bindings use those names; where both keys of a modifier
+were bound, the left one is on the merged key and the right one ships
+unbound. The test `package:key-names` (`tests/check-key-names.py`) reads the
+names from Chimera's source and checks every binding.
+
+Measured: 22 bindings were changed, the keypad's digits on the number row
+("1" is "Number1") and Option on Enter (was Return), for both machines.
