@@ -1,0 +1,45 @@
+diff --git a/src/debug/gdbsock.c b/src/debug/gdbsock.c
+index cac4b32..45fa085 100644
+--- a/src/debug/gdbsock.c
++++ b/src/debug/gdbsock.c
+@@ -16,6 +16,10 @@
+     defined(__linux__) || defined(__ANDROID__)
+ #define GDB_HAVE_TCP 1
+ #endif
++#ifdef CHIMERA_CORE
++/* Chimera: no sockets in a core; upstream's own inert stubs are built */
++#undef GDB_HAVE_TCP
++#endif
+ 
+ #ifdef GDB_HAVE_TCP
+ 
+diff --git a/src/jerry/jlink_discover.c b/src/jerry/jlink_discover.c
+index c8f751c..66d7c86 100644
+--- a/src/jerry/jlink_discover.c
++++ b/src/jerry/jlink_discover.c
+@@ -203,6 +203,10 @@ const JLinkPeer *JLinkDiscPeerAt(int i)
+     defined(__linux__) || defined(__ANDROID__)
+ #define JLINK_DISC_HAVE_NET 1
+ #endif
++#ifdef CHIMERA_CORE
++/* Chimera: no sockets in a core; upstream's own inert stubs are built */
++#undef JLINK_DISC_HAVE_NET
++#endif
+ 
+ #ifdef JLINK_DISC_HAVE_NET
+ 
+diff --git a/src/jerry/jlink_tcp.c b/src/jerry/jlink_tcp.c
+index 58078ec..eeef736 100644
+--- a/src/jerry/jlink_tcp.c
++++ b/src/jerry/jlink_tcp.c
+@@ -21,6 +21,10 @@
+     defined(__linux__) || defined(__ANDROID__)
+ #define JLINK_HAVE_TCP 1
+ #endif
++#ifdef CHIMERA_CORE
++/* Chimera: no sockets in a core; upstream's own inert stubs are built */
++#undef JLINK_HAVE_TCP
++#endif
+ 
+ #ifdef JLINK_HAVE_TCP
+ 

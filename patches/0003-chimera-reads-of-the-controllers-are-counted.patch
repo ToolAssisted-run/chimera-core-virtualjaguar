@@ -1,0 +1,23 @@
+diff --git a/src/jerry/joystick.c b/src/jerry/joystick.c
+index aded5a6..f55592d 100644
+--- a/src/jerry/joystick.c
++++ b/src/jerry/joystick.c
+@@ -156,8 +156,18 @@ void JoystickDone(void)
+ }
+ 
+ 
++#ifdef CHIMERA_CORE
++/* Chimera: how many times the machine read its controllers ($F14000 and
++ * $F14002) since the core last cleared it. A frame with none is a lag
++ * frame. */
++int chimera_input_reads;
++#endif
++
+ uint16_t JoystickReadWord(uint32_t offset)
+ {
++#ifdef CHIMERA_CORE
++	chimera_input_reads++;
++#endif
+ 	offset &= 0x03;
+ 
+ 	if (offset == 0)

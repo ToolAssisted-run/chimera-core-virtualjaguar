@@ -1,0 +1,3 @@
+[submodule "extern/virtualjaguar"]
+	path = extern/virtualjaguar
+	url = https://github.com/libretro/virtualjaguar-libretro.git

@@ -1,0 +1,20 @@
+diff --git a/libretro.c b/libretro.c
+index 313fd30..5d3517f 100644
+--- a/libretro.c
++++ b/libretro.c
+@@ -4998,6 +4998,15 @@ static void update_input(void)
+     * apply_port_device() guarantees a tap and a non-pad device are never
+     * attached to the same port. */
+    update_teamtap_input();
++#ifdef CHIMERA_CORE
++   /* Chimera: the movie's controls go in last, into the Jaguar's own
++    * button tables, over whatever the libretro mapping above made of the
++    * (empty) RetroPad */
++   {
++      extern void chimera_fill_joypads(void);
++      chimera_fill_joypads();
++   }
++#endif
+ }
+ 
+ /************************************
