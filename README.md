@@ -4,7 +4,7 @@ A core for [Chimera](https://github.com/ToolAssisted-run/chimera), the
 frontend for tool-assisted speedruns, for the **Atari Jaguar** and the **Jaguar CD**. It is built
 on [Virtual Jaguar](https://github.com/libretro/virtualjaguar-libretro) 3.9.0
 and produces one file, `virtualjaguar.chimeraCore`, that goes in Chimera's
-`Cores` folder.
+`cores` folder.
 
 ## Status
 
