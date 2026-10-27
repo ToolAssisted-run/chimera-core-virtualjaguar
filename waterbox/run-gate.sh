@@ -125,7 +125,7 @@ buttons = [l[l.index("'") + 1:l.rindex("'")] for l in open(sys.argv[2]) if l.sta
 m = cfg["machines"]
 sys.exit(0 if len(m) == 2 and all(x["input"]["buttons"] == buttons and len(x["input"]["axes"]) == 22 for x in m) and len(buttons) == 194 else 1)
 PY
-if [ -n "$chimera_root" ] && [ -f "$chimera_root/source/gui/Chimera.Input/KeyMouseInput/DistinctKey.cs" ]; then
+if [ -n "$chimera_root" ] && [ -f "$chimera_root/source/ui/qt/key_codes.inc" ]; then
 	check "package:key-names" "every host key the package's default bindings name is a key Chimera knows: $(python3 "$root/tests/check-key-names.py" "$chimera_root" "$here/default_keybinds.json" 2>&1)" \
 		sh -c "python3 '$root/tests/check-key-names.py' '$chimera_root' '$here/default_keybinds.json' > /dev/null 2>&1"
 else
