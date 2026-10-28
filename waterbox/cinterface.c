@@ -28,6 +28,11 @@
 #include "joystick.h"
 
 /* ---- what went wrong, for Chimera to show -------------------------------- */
+/* A text a person reads is a key of languages/en.json, each of its
+ * arguments after a TEXT_ARG (chimera docs/translations.md). TEXT_ARG is a
+ * string of its own so the byte after it is never read as more of its hex. */
+#define TEXT_ARG "\x1f"
+
 static char g_loadError[512];
 
 /* ---- the emulator's options ------------------------------------------------
@@ -494,7 +499,7 @@ ECL_EXPORT int Init(void)
 	}
 	if (!g_game[0])
 	{
-		snprintf(g_loadError, sizeof g_loadError, "no game was given");
+		snprintf(g_loadError, sizeof g_loadError, "error.no_file");
 		return 0;
 	}
 	for (int p = 0; p < PLAYERS; p++)
@@ -529,7 +534,7 @@ ECL_EXPORT int Init(void)
 		struct retro_game_info disc = { g_game, NULL, 0, NULL };
 		if (!retro_load_game(&disc))
 		{
-			snprintf(g_loadError, sizeof g_loadError, "the emulator did not start with the disc %s", g_game);
+			snprintf(g_loadError, sizeof g_loadError, "error.disc_not_started" TEXT_ARG "%s", g_game);
 			return 0;
 		}
 		return finish_init();
@@ -539,7 +544,7 @@ ECL_EXPORT int Init(void)
 	FILE *f = fopen(g_game, "rb");
 	if (!f)
 	{
-		snprintf(g_loadError, sizeof g_loadError, "the game's file could not be read: %s", g_game);
+		snprintf(g_loadError, sizeof g_loadError, "error.not_read" TEXT_ARG "%s", g_game);
 		return 0;
 	}
 	fseek(f, 0, SEEK_END);
@@ -549,14 +554,14 @@ ECL_EXPORT int Init(void)
 	if (!bytes || fread(bytes, 1, (size_t)size, f) != (size_t)size)
 	{
 		fclose(f);
-		snprintf(g_loadError, sizeof g_loadError, "the game's file could not be read: %s", g_game);
+		snprintf(g_loadError, sizeof g_loadError, "error.not_read" TEXT_ARG "%s", g_game);
 		return 0;
 	}
 	fclose(f);
 	struct retro_game_info info = { g_game, bytes, (size_t)size, NULL };
 	if (!retro_load_game(&info))
 	{
-		snprintf(g_loadError, sizeof g_loadError, "the emulator did not start with %s", g_game);
+		snprintf(g_loadError, sizeof g_loadError, "error.not_started" TEXT_ARG "%s", g_game);
 		return 0;
 	}
 	return finish_init();

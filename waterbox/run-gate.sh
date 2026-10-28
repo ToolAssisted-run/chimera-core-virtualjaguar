@@ -311,7 +311,7 @@ check "cd:chd" "upstream's synthetic CHD (synth_jagcd.chd) opens and starts, and
 mkdir -p "$work/none"
 printf '{"cart":[]}' > "$work/none/slots"; printf '{}' > "$work/none/settings"
 nat none none --frames 1
-check "refused:no-game" "a console with no game is refused, and says so" grep -q "Init failed.*no game was given" "$work/none.out" "$work/none.err"
+check "refused:no-game" "a console with no game is refused, and says so" grep -q "Init failed.*error.no_file" "$work/none.out" "$work/none.err"
 
 # ------------------------------------------------- Chimera's engine
 runner="$chimera_root/build/dll/chimera-run"
