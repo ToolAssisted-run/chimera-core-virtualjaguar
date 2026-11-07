@@ -33,8 +33,7 @@ endif
 # upstream's own defines (Makefile, Makefile.common), and what the patches
 # test for
 defs = [
-  '-D__LIBRETRO__', '-DINLINE=inline', '-DNDEBUG', '-DBLITTER_SIMD_SSE2',
-  '-DCHIMERA_CORE',
+  '-D__LIBRETRO__', '-DINLINE=inline', '-DNDEBUG', '-DCHIMERA_CORE',
 ]
 # upstream's -fno-strict-overflow and -fno-strict-aliasing; one answer from
 # a floating-point expression on every machine (no fused multiply-adds);
@@ -44,8 +43,17 @@ flags = [
   '-fno-strict-aliasing',
   '-ffp-contract=off',
   '-ftrivial-auto-var-init=zero',
-  '-msse2',
 ]
+# the blitter's SIMD version for the CPU, as upstream's Makefile picks it:
+# SSE2 on x86-64, NEON on aarch64 (both builds of one CPU take the same one)
+if host_machine.cpu_family() == 'aarch64'
+  defs += ['-DBLITTER_SIMD_NEON']
+  blitter_simd = 'src/tom/blitter_simd_neon.c'
+else
+  defs += ['-DBLITTER_SIMD_SSE2']
+  flags += ['-msse2']
+  blitter_simd = 'src/tom/blitter_simd_sse2.c'
+endif
 add_project_arguments(defs + flags, language: 'c')
 
 inc = include_directories(
@@ -128,7 +136,7 @@ vj_names = [
   'src/debug/gdbtarget.c',
   'src/debug/vjdebug.c',
   'src/debug/gdbsock.c',
-  'src/tom/blitter_simd_sse2.c',
+  blitter_simd,
 ]
 lrc_names = [
   'compat/compat_strcasestr.c',
